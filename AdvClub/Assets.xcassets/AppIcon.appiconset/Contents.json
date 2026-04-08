@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "A6DE677B-FB9F-4DAE-9F8B-EB7C60CF7255.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -12,6 +13,7 @@
           "value" : "dark"
         }
       ],
+      "filename" : "A6DE677B-FB9F-4DAE-9F8B-EB7C60CF7255 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -23,6 +25,7 @@
           "value" : "tinted"
         }
       ],
+      "filename" : "A6DE677B-FB9F-4DAE-9F8B-EB7C60CF7255 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -53,6 +56,7 @@
       "size" : "128x128"
     },
     {
+      "filename" : "appBackground.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "128x128"
