@@ -6,6 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3FD226842F8D8B9900A03825 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 3FD226832F8D8B9900A03825 /* FirebaseAuth */; };
+		3FD226862F8D8B9900A03825 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3FD226852F8D8B9900A03825 /* FirebaseCore */; };
+		3FD226882F8D8B9900A03825 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 3FD226872F8D8B9900A03825 /* FirebaseFirestore */; };
+		3FD2268D2F8EBB0E00A03825 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = 3FD2268C2F8EBB0E00A03825 /* FirebaseFunctions */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		3F8264302F846E7A0045E057 /* AdvClub.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AdvClub.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +30,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3FD226862F8D8B9900A03825 /* FirebaseCore in Frameworks */,
+				3FD226842F8D8B9900A03825 /* FirebaseAuth in Frameworks */,
+				3FD226882F8D8B9900A03825 /* FirebaseFirestore in Frameworks */,
+				3FD2268D2F8EBB0E00A03825 /* FirebaseFunctions in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -33,6 +44,7 @@
 			isa = PBXGroup;
 			children = (
 				3F8264322F846E7A0045E057 /* AdvClub */,
+				3FD2268B2F8EBB0E00A03825 /* Frameworks */,
 				3F8264312F846E7A0045E057 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +55,13 @@
 				3F8264302F846E7A0045E057 /* AdvClub.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		3FD2268B2F8EBB0E00A03825 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -65,6 +84,10 @@
 			);
 			name = AdvClub;
 			packageProductDependencies = (
+				3FD226832F8D8B9900A03825 /* FirebaseAuth */,
+				3FD226852F8D8B9900A03825 /* FirebaseCore */,
+				3FD226872F8D8B9900A03825 /* FirebaseFirestore */,
+				3FD2268C2F8EBB0E00A03825 /* FirebaseFunctions */,
 			);
 			productName = AdvClub;
 			productReference = 3F8264302F846E7A0045E057 /* AdvClub.app */;
@@ -94,6 +117,9 @@
 			);
 			mainGroup = 3F8264272F846E7A0045E057;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				3FD226822F8D8B9900A03825 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3F8264312F846E7A0045E057 /* Products */;
 			projectDirPath = "";
@@ -254,7 +280,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "How 2 Adventure";
+				INFOPLIST_KEY_CFBundleDisplayName = "Adventure Club";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -270,7 +297,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.7;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = Longhairedstuntman.AdvClub;
+				PRODUCT_BUNDLE_IDENTIFIER = com.Longhairedstuntman.AdvClub;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -300,7 +327,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "How 2 Adventure";
+				INFOPLIST_KEY_CFBundleDisplayName = "Adventure Club";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -316,7 +344,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.7;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = Longhairedstuntman.AdvClub;
+				PRODUCT_BUNDLE_IDENTIFIER = com.Longhairedstuntman.AdvClub;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -355,6 +383,40 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		3FD226822F8D8B9900A03825 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.12.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3FD226832F8D8B9900A03825 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FD226822F8D8B9900A03825 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		3FD226852F8D8B9900A03825 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FD226822F8D8B9900A03825 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		3FD226872F8D8B9900A03825 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FD226822F8D8B9900A03825 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		3FD2268C2F8EBB0E00A03825 /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FD226822F8D8B9900A03825 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3F8264282F846E7A0045E057 /* Project object */;
 }
