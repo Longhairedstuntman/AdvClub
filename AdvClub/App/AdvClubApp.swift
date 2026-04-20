@@ -31,6 +31,7 @@ struct AdvClubApp: App {
                 .environmentObject(resourceManager)
                 .environmentObject(reservationManager)
                 .environmentObject(calendarEntryManager)
+                .preferredColorScheme(.light)
         }
     }
 }

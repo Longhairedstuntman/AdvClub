@@ -124,6 +124,16 @@ final class ReservationManager: ObservableObject {
             }
         }
 
+        let hasConflict = await hasReservationConflict(
+            resourceID: trimmedResourceID,
+            startDate: startDate,
+            endDate: endDate
+        )
+
+        if hasConflict {
+            return .failure(.resourceUnavailable)
+        }
+
         do {
             let document = db.collection("reservations").document()
             let record = ReservationRecord(
@@ -193,6 +203,87 @@ final class ReservationManager: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             return .failure(.backendFailure(error.localizedDescription))
+        }
+    }
+
+    private func hasReservationConflict(
+        resourceID: String,
+        startDate: Date,
+        endDate: Date
+    ) async -> Bool {
+        async let reservationConflict = hasReservationCollectionConflict(
+            resourceID: resourceID,
+            startDate: startDate,
+            endDate: endDate
+        )
+        async let calendarEntryConflict = hasCalendarEntryConflict(
+            resourceID: resourceID,
+            startDate: startDate,
+            endDate: endDate
+        )
+
+        let reservationConflictResult = await reservationConflict
+        let calendarEntryConflictResult = await calendarEntryConflict
+        return reservationConflictResult || calendarEntryConflictResult
+    }
+
+    private func hasReservationCollectionConflict(
+        resourceID: String,
+        startDate: Date,
+        endDate: Date
+    ) async -> Bool {
+        do {
+            let snapshot = try await db.collection("reservations")
+                .whereField("resourceID", isEqualTo: resourceID)
+                .getDocuments()
+
+            return snapshot.documents.contains { document in
+                guard let reservation = Self.makeReservation(from: document) else { return false }
+                guard reservation.status != .denied && reservation.status != .cancelled else { return false }
+                return Self.dateRangesOverlap(
+                    reservation.startDate,
+                    reservation.endDate,
+                    startDate,
+                    endDate
+                )
+            }
+        } catch {
+            return false
+        }
+    }
+
+    private func hasCalendarEntryConflict(
+        resourceID: String,
+        startDate: Date,
+        endDate: Date
+    ) async -> Bool {
+        do {
+            let snapshot = try await db.collection("calendarEntries")
+                .whereField("resourceID", isEqualTo: resourceID)
+                .getDocuments()
+
+            return snapshot.documents.contains { document in
+                let data = document.data()
+                guard let entryTypeRaw = data["entryType"] as? String,
+                      let entryType = CalendarEntryType(rawValue: entryTypeRaw),
+                      let isPublished = data["isPublished"] as? Bool,
+                      let entryStart = data["startDate"] as? Timestamp,
+                      let entryEnd = data["endDate"] as? Timestamp else {
+                    return false
+                }
+
+                guard isPublished else { return false }
+                guard entryType == .reservation || entryType == .block else { return false }
+
+                return Self.dateRangesOverlap(
+                    entryStart.dateValue(),
+                    entryEnd.dateValue(),
+                    startDate,
+                    endDate
+                )
+            }
+        } catch {
+            return false
         }
     }
 
@@ -293,6 +384,21 @@ final class ReservationManager: ObservableObject {
             }
         }
         return count
+    }
+
+    private static func dateRangesOverlap(
+        _ lhsStart: Date,
+        _ lhsEnd: Date,
+        _ rhsStart: Date,
+        _ rhsEnd: Date
+    ) -> Bool {
+        let calendar = Calendar.current
+        let leftStart = calendar.startOfDay(for: lhsStart)
+        let leftEnd = calendar.startOfDay(for: lhsEnd)
+        let rightStart = calendar.startOfDay(for: rhsStart)
+        let rightEnd = calendar.startOfDay(for: rhsEnd)
+
+        return leftStart <= rightEnd && rightStart <= leftEnd
     }
 
     private static func makeReservation(from document: DocumentSnapshot) -> ReservationRecord? {
@@ -448,6 +554,7 @@ enum ReservationError: LocalizedError {
     case invalidDateRange
     case missingTimeRange
     case hourlyLimitExceeded(max: Int)
+    case resourceUnavailable
     case backendFailure(String)
 
     var errorDescription: String? {
@@ -464,6 +571,8 @@ enum ReservationError: LocalizedError {
             return "Start and end times are required for non all-day reservations."
         case .hourlyLimitExceeded(let max):
             return "This hourly reservation is limited to \(max) consecutive hours."
+        case .resourceUnavailable:
+            return "That resource is already reserved for the selected day or date range."
         case .backendFailure(let message):
             return message
         }

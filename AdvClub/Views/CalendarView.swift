@@ -21,107 +21,8 @@ struct CalendarView: View {
     @EnvironmentObject private var calendarEntryManager: CalendarEntryManager
 
     private let months: [CalendarMonth] = [
-        CalendarMonth(
-            title: "April 2026",
-            subtitle: "Shared club calendar",
-            days: [
-                CalendarDay(number: nil, categories: [], isToday: false, items: []),
-                CalendarDay(number: nil, categories: [], isToday: false, items: []),
-                CalendarDay(number: nil, categories: [], isToday: false, items: []),
-                CalendarDay(number: 1, categories: [], isToday: false, items: []),
-                CalendarDay(number: 2, categories: [.groupReservation], isToday: false, items: [
-                    CalendarListItem(title: "Bronco Reserved", subtitle: "Reserved by another member", dateText: "Apr 2", category: .groupReservation)
-                ]),
-                CalendarDay(number: 3, categories: [], isToday: false, items: []),
-                CalendarDay(number: 4, categories: [], isToday: false, items: []),
-                CalendarDay(number: 5, categories: [], isToday: false, items: []),
-                CalendarDay(number: 6, categories: [], isToday: false, items: []),
-                CalendarDay(number: 7, categories: [.event], isToday: false, items: [
-                    CalendarListItem(title: "Spring Trail Meet", subtitle: "Club event", dateText: "Apr 7 • 9:00 AM", category: .event)
-                ]),
-                CalendarDay(number: 8, categories: [], isToday: false, items: []),
-                CalendarDay(number: 9, categories: [], isToday: false, items: []),
-                CalendarDay(number: 10, categories: [], isToday: false, items: []),
-                CalendarDay(number: 11, categories: [], isToday: false, items: []),
-                CalendarDay(number: 12, categories: [], isToday: false, items: []),
-                CalendarDay(number: 13, categories: [], isToday: false, items: []),
-                CalendarDay(number: 14, categories: [], isToday: true, items: []),
-                CalendarDay(number: 15, categories: [], isToday: false, items: []),
-                CalendarDay(number: 16, categories: [], isToday: false, items: []),
-                CalendarDay(number: 17, categories: [], isToday: false, items: []),
-                CalendarDay(number: 18, categories: [.myReservation], isToday: false, items: [
-                    CalendarListItem(title: "Moab Reservation", subtitle: "Your reserved club access", dateText: "Apr 18", category: .myReservation)
-                ]),
-                CalendarDay(number: 19, categories: [.myReservation], isToday: false, items: [
-                    CalendarListItem(title: "Moab Reservation", subtitle: "Your reserved club access", dateText: "Apr 19", category: .myReservation)
-                ]),
-                CalendarDay(number: 20, categories: [.myReservation], isToday: false, items: [
-                    CalendarListItem(title: "Moab Reservation", subtitle: "Your reserved club access", dateText: "Apr 20", category: .myReservation)
-                ]),
-                CalendarDay(number: 21, categories: [], isToday: false, items: []),
-                CalendarDay(number: 22, categories: [], isToday: false, items: []),
-                CalendarDay(number: 23, categories: [], isToday: false, items: []),
-                CalendarDay(number: 24, categories: [], isToday: false, items: []),
-                CalendarDay(number: 25, categories: [], isToday: false, items: []),
-                CalendarDay(number: 26, categories: [], isToday: false, items: []),
-                CalendarDay(number: 27, categories: [.event], isToday: false, items: [
-                    CalendarListItem(title: "Spring Trail Meet", subtitle: "Club event", dateText: "Apr 27 • 9:00 AM", category: .event)
-                ]),
-                CalendarDay(number: 28, categories: [], isToday: false, items: []),
-                CalendarDay(number: 29, categories: [], isToday: false, items: []),
-                CalendarDay(number: 30, categories: [], isToday: false, items: [])
-            ]
-        ),
-        CalendarMonth(
-            title: "May 2026",
-            subtitle: "Shared club calendar",
-            days: [
-                CalendarDay(number: nil, categories: [], isToday: false, items: []),
-                CalendarDay(number: nil, categories: [], isToday: false, items: []),
-                CalendarDay(number: nil, categories: [], isToday: false, items: []),
-                CalendarDay(number: nil, categories: [], isToday: false, items: []),
-                CalendarDay(number: nil, categories: [], isToday: false, items: []),
-                CalendarDay(number: 1, categories: [], isToday: false, items: []),
-                CalendarDay(number: 2, categories: [.groupReservation], isToday: false, items: [
-                    CalendarListItem(title: "Bronco Reserved", subtitle: "Reserved by another member", dateText: "May 2", category: .groupReservation)
-                ]),
-                CalendarDay(number: 3, categories: [], isToday: false, items: []),
-                CalendarDay(number: 4, categories: [], isToday: false, items: []),
-                CalendarDay(number: 5, categories: [.event], isToday: false, items: [
-                    CalendarListItem(title: "New Member Social", subtitle: "Club event", dateText: "May 5 • 6:00 PM", category: .event)
-                ]),
-                CalendarDay(number: 6, categories: [], isToday: false, items: []),
-                CalendarDay(number: 7, categories: [], isToday: false, items: []),
-                CalendarDay(number: 8, categories: [], isToday: false, items: []),
-                CalendarDay(number: 9, categories: [], isToday: false, items: []),
-                CalendarDay(number: 10, categories: [], isToday: false, items: []),
-                CalendarDay(number: 11, categories: [], isToday: false, items: []),
-                CalendarDay(number: 12, categories: [], isToday: false, items: []),
-                CalendarDay(number: 13, categories: [.myReservation], isToday: false, items: [
-                    CalendarListItem(title: "Canyon Drive Reservation", subtitle: "Your reserved club access", dateText: "May 13", category: .myReservation)
-                ]),
-                CalendarDay(number: 14, categories: [.myReservation], isToday: false, items: [
-                    CalendarListItem(title: "Canyon Drive Reservation", subtitle: "Your reserved club access", dateText: "May 14", category: .myReservation)
-                ]),
-                CalendarDay(number: 15, categories: [], isToday: false, items: []),
-                CalendarDay(number: 16, categories: [], isToday: false, items: []),
-                CalendarDay(number: 17, categories: [], isToday: false, items: []),
-                CalendarDay(number: 18, categories: [], isToday: false, items: []),
-                CalendarDay(number: 19, categories: [], isToday: false, items: []),
-                CalendarDay(number: 20, categories: [], isToday: false, items: []),
-                CalendarDay(number: 21, categories: [], isToday: false, items: []),
-                CalendarDay(number: 22, categories: [], isToday: false, items: []),
-                CalendarDay(number: 23, categories: [], isToday: false, items: []),
-                CalendarDay(number: 24, categories: [], isToday: false, items: []),
-                CalendarDay(number: 25, categories: [], isToday: false, items: []),
-                CalendarDay(number: 26, categories: [], isToday: false, items: []),
-                CalendarDay(number: 27, categories: [], isToday: false, items: []),
-                CalendarDay(number: 28, categories: [], isToday: false, items: []),
-                CalendarDay(number: 29, categories: [], isToday: false, items: []),
-                CalendarDay(number: 30, categories: [], isToday: false, items: []),
-                CalendarDay(number: 31, categories: [], isToday: false, items: [])
-            ]
-        )
+        CalendarMonth.makeMonth(offsetFromCurrent: 0),
+        CalendarMonth.makeMonth(offsetFromCurrent: 1)
     ]
 
     var body: some View {
@@ -146,6 +47,7 @@ struct CalendarView: View {
         .background(Color.appBackgroundColor)
         .task {
             calendarEntryManager.startListeningPublishedEntries()
+            reservationManager.startListeningForCurrentUserReservations()
         }
         .toolbar {
             if sessionManager.isMember || sessionManager.isAdmin {
@@ -447,8 +349,9 @@ struct CalendarView: View {
 
     private var filteredAgendaItems: [CalendarListItem] {
         let staticItems = currentMonth.days.flatMap { $0.items }
-        let dynamicItems = firebaseItems(for: currentMonth)
-        return filteredItems(for: staticItems + dynamicItems)
+        let dynamicCalendarEntries = firebaseItems(for: currentMonth)
+        let memberReservationItems = reservationItems(for: currentMonth)
+        return filteredItems(for: staticItems + dynamicCalendarEntries + memberReservationItems)
     }
 
     private func firebaseItems(for month: CalendarMonth) -> [CalendarListItem] {
@@ -458,8 +361,26 @@ struct CalendarView: View {
         }
     }
 
+    private func reservationItems(for month: CalendarMonth) -> [CalendarListItem] {
+        reservationManager.reservations.compactMap { reservation in
+            guard reservationBelongsToMonth(reservation, month: month) else { return nil }
+            return makeCalendarListItem(from: reservation)
+        }
+    }
+
+    private func reservationItems(forDayNumber dayNumber: Int?, month: CalendarMonth) -> [CalendarListItem] {
+        guard let dayNumber else { return [] }
+
+        return reservationManager.reservations.compactMap { reservation in
+            guard reservationContainsDay(reservation, dayNumber: dayNumber, month: month) else { return nil }
+            return makeCalendarListItem(from: reservation)
+        }
+    }
+
     private func mergedItems(for day: CalendarDay, month: CalendarMonth) -> [CalendarListItem] {
-        day.items + firebaseItems(forDayNumber: day.number, month: month)
+        day.items
+        + firebaseItems(forDayNumber: day.number, month: month)
+        + reservationItems(forDayNumber: day.number, month: month)
     }
 
     private func firebaseItems(forDayNumber dayNumber: Int?, month: CalendarMonth) -> [CalendarListItem] {
@@ -472,8 +393,9 @@ struct CalendarView: View {
     }
 
     private func effectiveCategories(for day: CalendarDay, month: CalendarMonth) -> [CalendarItemCategory] {
-        let dynamicCategories = firebaseItems(forDayNumber: day.number, month: month).map(\ .category)
-        return Array((day.categories + dynamicCategories).prefix(3))
+        let firebaseCategories = firebaseItems(forDayNumber: day.number, month: month).map(\.category)
+        let reservationCategories = reservationItems(forDayNumber: day.number, month: month).map(\.category)
+        return Array((day.categories + firebaseCategories + reservationCategories).prefix(3))
     }
 
     private func entryBelongsToMonth(_ entry: CalendarEntryRecord, month: CalendarMonth) -> Bool {
@@ -521,6 +443,51 @@ struct CalendarView: View {
         return entry.startDate <= endOfDay && entry.endDate >= startOfDay
     }
 
+    private func reservationBelongsToMonth(_ reservation: ReservationRecord, month: CalendarMonth) -> Bool {
+        let parts = month.title.split(separator: " ")
+        guard parts.count >= 2,
+              let monthIndex = monthNumber(from: String(parts[0])),
+              let year = Int(parts[1]) else {
+            return false
+        }
+
+        let calendar = Calendar.current
+        let startComponents = calendar.dateComponents([.year, .month], from: reservation.startDate)
+        let endComponents = calendar.dateComponents([.year, .month], from: reservation.endDate)
+
+        let startYear = startComponents.year ?? 0
+        let startMonth = startComponents.month ?? 0
+        let endYear = endComponents.year ?? 0
+        let endMonth = endComponents.month ?? 0
+
+        if startYear == year && startMonth == monthIndex { return true }
+        if endYear == year && endMonth == monthIndex { return true }
+
+        if let monthStart = calendar.date(from: DateComponents(year: year, month: monthIndex, day: 1)),
+           let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart) {
+            return reservation.startDate <= monthEnd && reservation.endDate >= monthStart
+        }
+
+        return false
+    }
+
+    private func reservationContainsDay(_ reservation: ReservationRecord, dayNumber: Int, month: CalendarMonth) -> Bool {
+        let parts = month.title.split(separator: " ")
+        guard parts.count >= 2,
+              let monthIndex = monthNumber(from: String(parts[0])),
+              let year = Int(parts[1]),
+              let date = Calendar.current.date(from: DateComponents(year: year, month: monthIndex, day: dayNumber)) else {
+            return false
+        }
+
+        let startOfDay = Calendar.current.startOfDay(for: date)
+        guard let endOfDay = Calendar.current.date(byAdding: DateComponents(day: 1, second: -1), to: startOfDay) else {
+            return false
+        }
+
+        return reservation.startDate <= endOfDay && reservation.endDate >= startOfDay
+    }
+
     private func monthNumber(from monthName: String) -> Int? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -543,9 +510,17 @@ struct CalendarView: View {
         case .event:
             subtitle = "Club event"
         case .reservation:
-            subtitle = "Reserved"
+            if let resourceName = entry.resourceName, resourceName.isEmpty == false {
+                subtitle = "Reserved • \(resourceName)"
+            } else {
+                subtitle = "Reserved"
+            }
         case .block:
-            subtitle = "Blocked"
+            if let resourceName = entry.resourceName, resourceName.isEmpty == false {
+                subtitle = "Blocked • \(resourceName)"
+            } else {
+                subtitle = "Blocked"
+            }
         }
 
         let dateText: String
@@ -572,6 +547,34 @@ struct CalendarView: View {
             subtitle: subtitle,
             dateText: dateText,
             category: category
+        )
+    }
+
+    private func makeCalendarListItem(from reservation: ReservationRecord) -> CalendarListItem {
+        let dateText: String
+        if reservation.isAllDay {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "MMM d"
+            let start = formatter.string(from: reservation.startDate)
+            let end = formatter.string(from: reservation.endDate)
+            dateText = start == end ? start : "\(start) – \(end)"
+        } else {
+            if let startTimeText = reservation.startTimeText, let endTimeText = reservation.endTimeText {
+                dateText = "\(startTimeText) – \(endTimeText)"
+            } else {
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.dateFormat = "MMM d"
+                dateText = formatter.string(from: reservation.startDate)
+            }
+        }
+
+        return CalendarListItem(
+            title: reservation.title,
+            subtitle: "My reservation • \(reservation.resourceName)",
+            dateText: dateText,
+            category: .myReservation
         )
     }
 
@@ -1047,6 +1050,18 @@ private struct AdminCalendarEntrySheet: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        Task {
+                            await saveEntry()
+                        }
+                    } label: {
+                        Text(isSaving ? "Saving..." : "Save")
+                    }
+                    .disabled(isSaving || (entryType != .event && selectedResource == nil))
+                    .foregroundStyle(.black)
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         dismiss()
@@ -1091,7 +1106,10 @@ private struct CalendarReservationFormSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var resourceManager: ResourceManager
     @EnvironmentObject private var reservationManager: ReservationManager
+    @EnvironmentObject private var calendarEntryManager: CalendarEntryManager
 
+    @State private var showingConflictAlert = false
+    @State private var conflictMessage = ""
     @State private var reservationTitle = ""
     @State private var selectedResourceID: String = ""
     @State private var startDate: Date
@@ -1156,6 +1174,18 @@ private struct CalendarReservationFormSheet: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        Task {
+                            await saveReservation()
+                        }
+                    } label: {
+                        Text(isSaving ? "Saving..." : "Reserve")
+                    }
+                    .disabled(isSaving || selectedResource == nil)
+                    .foregroundStyle(.black)
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         dismiss()
@@ -1163,6 +1193,11 @@ private struct CalendarReservationFormSheet: View {
                     .foregroundStyle(.black)
                 }
             }
+        }
+        .alert("Reservation Issue", isPresented: $showingConflictAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(conflictMessage)
         }
     }
 
@@ -1327,10 +1362,46 @@ private struct CalendarReservationFormSheet: View {
             .padding(.top, 4)
         }
     }
+    
+    private func hasReservationConflict(for resource: ReservableResourceItem) -> Bool {
+        let entryConflict = calendarEntryManager.entries.contains { entry in
+            guard entry.entryType == .reservation || entry.entryType == .block else { return false }
+            guard entry.resourceID == resource.id else { return false }
+            return dateRangesOverlap(startDate, endDate, entry.startDate, entry.endDate)
+        }
+
+        if entryConflict {
+            return true
+        }
+
+        let reservationConflict = reservationManager.reservations.contains { reservation in
+            guard reservation.resourceID == resource.id else { return false }
+            guard reservation.status != .denied && reservation.status != .cancelled else { return false }
+            return dateRangesOverlap(startDate, endDate, reservation.startDate, reservation.endDate)
+        }
+
+        return reservationConflict
+    }
+
+    private func dateRangesOverlap(_ lhsStart: Date, _ lhsEnd: Date, _ rhsStart: Date, _ rhsEnd: Date) -> Bool {
+        let calendar = Calendar.current
+        let leftStart = calendar.startOfDay(for: lhsStart)
+        let leftEnd = calendar.startOfDay(for: lhsEnd)
+        let rightStart = calendar.startOfDay(for: rhsStart)
+        let rightEnd = calendar.startOfDay(for: rhsEnd)
+
+        return leftStart <= rightEnd && rightStart <= leftEnd
+    }
 
     private func saveReservation() async {
         guard let selectedResource else {
             message = "Select a resource before saving the reservation."
+            return
+        }
+        
+        if hasReservationConflict(for: selectedResource) {
+            conflictMessage = "That option is already reserved for the selected day or date range. Please choose a different date or resource."
+            showingConflictAlert = true
             return
         }
 
@@ -1473,6 +1544,53 @@ private struct CalendarMonth: Identifiable {
     let title: String
     let subtitle: String
     let days: [CalendarDay]
+}
+
+private extension CalendarMonth {
+    static func makeMonth(offsetFromCurrent offset: Int) -> CalendarMonth {
+        let calendar = Calendar.current
+        let baseDate = Date()
+        guard let targetDate = calendar.date(byAdding: .month, value: offset, to: baseDate) else {
+            return CalendarMonth(title: "", subtitle: "Shared club calendar", days: [])
+        }
+
+        let monthFormatter = DateFormatter()
+        monthFormatter.locale = Locale(identifier: "en_US_POSIX")
+        monthFormatter.dateFormat = "MMMM yyyy"
+        let title = monthFormatter.string(from: targetDate)
+
+        let components = calendar.dateComponents([.year, .month], from: targetDate)
+        guard let monthStart = calendar.date(from: components),
+              let range = calendar.range(of: .day, in: .month, for: monthStart) else {
+            return CalendarMonth(title: title, subtitle: "Shared club calendar", days: [])
+        }
+
+        let firstWeekday = calendar.component(.weekday, from: monthStart)
+        let leadingEmptyDays = max(firstWeekday - 1, 0)
+
+        var days: [CalendarDay] = Array(
+            repeating: CalendarDay(number: nil, categories: [], isToday: false, items: []),
+            count: leadingEmptyDays
+        )
+
+        for dayNumber in range {
+            guard let date = calendar.date(byAdding: .day, value: dayNumber - 1, to: monthStart) else { continue }
+            days.append(
+                CalendarDay(
+                    number: dayNumber,
+                    categories: [],
+                    isToday: calendar.isDateInToday(date),
+                    items: []
+                )
+            )
+        }
+
+        return CalendarMonth(
+            title: title,
+            subtitle: "Shared club calendar",
+            days: days
+        )
+    }
 }
 
 #Preview {
