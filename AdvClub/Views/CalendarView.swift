@@ -11,7 +11,7 @@ struct CalendarView: View {
     @State private var selectedScope: CalendarScope = .month
     @State private var selectedFilter: CalendarFilter = .all
     @State private var selectedDisplayStyle: CalendarDisplayStyle = .dots
-    @State private var selectedMonthIndex: Int = 0
+    @State private var selectedMonthIndex: Int = 24
     @State private var selectedDay: CalendarDay?
     @State private var isPresentingReservationForm = false
     @State private var isPresentingAdminEntryForm = false
@@ -20,17 +20,34 @@ struct CalendarView: View {
     @EnvironmentObject private var reservationManager: ReservationManager
     @EnvironmentObject private var calendarEntryManager: CalendarEntryManager
 
-    private let months: [CalendarMonth] = [
-        CalendarMonth.makeMonth(offsetFromCurrent: 0),
-        CalendarMonth.makeMonth(offsetFromCurrent: 1)
-    ]
+    init() {
+        UISegmentedControl.appearance().setTitleTextAttributes([
+            .foregroundColor: UIColor(white: 0.78, alpha: 1.0)
+        ], for: .normal)
+
+        UISegmentedControl.appearance().setTitleTextAttributes([
+            .foregroundColor: UIColor.black
+        ], for: .selected)
+    }
+
+    private let monthOffsets: [Int] = Array(-24...24)
+
+    private var months: [CalendarMonth] {
+        let calendar = Calendar.current
+        let currentMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+
+        return monthOffsets.compactMap { offset in
+            calendar.date(byAdding: .month, value: offset, to: currentMonthStart)
+        }
+        .map { CalendarMonth.makeMonth(for: $0) }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 headerSection
                 scopePickerSection
-                displayStyleSection
+                filterSection
 
                 if selectedScope == .month {
                     calendarCardSection
@@ -38,7 +55,6 @@ struct CalendarView: View {
                     agendaSection
                 }
 
-                filterSection
                 legendSection
             }
             .padding(24)
@@ -128,6 +144,7 @@ struct CalendarView: View {
             }
         }
         .pickerStyle(.segmented)
+        .colorMultiply(.white)
     }
 
     private var displayStyleSection: some View {
@@ -142,6 +159,7 @@ struct CalendarView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .colorMultiply(.white)
         }
     }
 
@@ -153,7 +171,7 @@ struct CalendarView: View {
                         .font(.title3)
                         .fontWeight(.semibold)
 
-                    Text("Swipe horizontally to move between months")
+                    Text("Swipe horizontally to move across months and years")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -207,7 +225,7 @@ struct CalendarView: View {
                         .font(.title3)
                         .fontWeight(.semibold)
 
-                    Text("Agenda view for the currently selected month")
+                    Text("Swipe horizontally to move across agenda months and years")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -220,41 +238,14 @@ struct CalendarView: View {
                 }
             }
 
-            if filteredAgendaItems.isEmpty {
-                Text("No matching items for this month.")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.68))
-            } else {
-                ForEach(filteredAgendaItems) { item in
-                    HStack(alignment: .top, spacing: 14) {
-                        Circle()
-                            .fill(item.category.color)
-                            .frame(width: 10, height: 10)
-                            .padding(.top, 6)
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(item.title)
-                                .font(.headline)
-
-                            Text(item.subtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.72))
-
-                            Text(item.dateText)
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.58))
-                        }
-
-                        Spacer()
-                    }
-                    .padding(.vertical, 6)
-
-                    if item.id != filteredAgendaItems.last?.id {
-                        Divider()
-                            .overlay(Color.white.opacity(0.08))
-                    }
+            TabView(selection: $selectedMonthIndex) {
+                ForEach(Array(months.enumerated()), id: \.offset) { index, month in
+                    agendaPage(for: month)
+                        .tag(index)
                 }
             }
+            .frame(height: 360)
+            .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .padding(20)
         .background(Color.white.opacity(0.05))
@@ -265,9 +256,55 @@ struct CalendarView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
+    private func agendaPage(for month: CalendarMonth) -> some View {
+        let items = filteredAgendaItems(for: month)
+
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if items.isEmpty {
+                    Text("No matching items for this month.")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.68))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 8)
+                } else {
+                    ForEach(items) { item in
+                        HStack(alignment: .top, spacing: 14) {
+                            Circle()
+                                .fill(item.category.color)
+                                .frame(width: 10, height: 10)
+                                .padding(.top, 6)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(item.title)
+                                    .font(.headline)
+
+                                Text(item.subtitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.72))
+
+                                Text(item.dateText)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.58))
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 6)
+
+                        if item.id != items.last?.id {
+                            Divider()
+                                .overlay(Color.white.opacity(0.08))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var filterSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("What to Show")
+            Text("Filter")
                 .font(.title3)
                 .fontWeight(.semibold)
 
@@ -277,6 +314,7 @@ struct CalendarView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .colorMultiply(.white)
         }
     }
 
@@ -348,9 +386,13 @@ struct CalendarView: View {
     }
 
     private var filteredAgendaItems: [CalendarListItem] {
-        let staticItems = currentMonth.days.flatMap { $0.items }
-        let dynamicCalendarEntries = firebaseItems(for: currentMonth)
-        let memberReservationItems = reservationItems(for: currentMonth)
+        filteredAgendaItems(for: currentMonth)
+    }
+
+    private func filteredAgendaItems(for month: CalendarMonth) -> [CalendarListItem] {
+        let staticItems = month.days.flatMap { $0.items }
+        let dynamicCalendarEntries = firebaseItems(for: month)
+        let memberReservationItems = reservationItems(for: month)
         return filteredItems(for: staticItems + dynamicCalendarEntries + memberReservationItems)
     }
 
@@ -649,16 +691,17 @@ struct CalendarView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 }
 
+
                 if selectedDisplayStyle == .bars {
                     VStack(spacing: 4) {
                         ForEach(Array(categories.prefix(3).enumerated()), id: \.offset) { _, category in
                             Capsule()
-                                .fill(category.color)
-                                .frame(width: 24, height: 4)
+                                .fill(category.color.opacity(0.85))
+                                .frame(width: 28, height: 5)
                         }
                     }
-                    .padding(8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.top, 10)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
             }
         }
@@ -1850,12 +1893,8 @@ private struct CalendarMonth: Identifiable {
 }
 
 private extension CalendarMonth {
-    static func makeMonth(offsetFromCurrent offset: Int) -> CalendarMonth {
+    static func makeMonth(for targetDate: Date) -> CalendarMonth {
         let calendar = Calendar.current
-        let baseDate = Date()
-        guard let targetDate = calendar.date(byAdding: .month, value: offset, to: baseDate) else {
-            return CalendarMonth(title: "", subtitle: "Shared club calendar", days: [])
-        }
 
         let monthFormatter = DateFormatter()
         monthFormatter.locale = Locale(identifier: "en_US_POSIX")
