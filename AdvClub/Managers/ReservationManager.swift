@@ -169,14 +169,32 @@ final class ReservationManager: ObservableObject {
                 return .failure(.resourceUnavailable)
             }
 
+            let startTimeValue: Any
+            if isAllDay {
+                startTimeValue = NSNull()
+            } else if let trimmedStartTime {
+                startTimeValue = trimmedStartTime
+            } else {
+                startTimeValue = NSNull()
+            }
+
+            let endTimeValue: Any
+            if isAllDay {
+                endTimeValue = NSNull()
+            } else if let trimmedEndTime {
+                endTimeValue = trimmedEndTime
+            } else {
+                endTimeValue = NSNull()
+            }
+
             try await db.collection("reservations").document(reservationID).updateData([
                 "title": trimmedTitle,
                 "notes": trimmedNotes,
                 "startDate": Timestamp(date: startDate),
                 "endDate": Timestamp(date: endDate),
                 "isAllDay": isAllDay,
-                "startTimeText": isAllDay ? nil : trimmedStartTime as Any,
-                "endTimeText": isAllDay ? nil : trimmedEndTime as Any,
+                "startTimeText": startTimeValue,
+                "endTimeText": endTimeValue,
                 "reservationMode": resolvedReservationMode.rawValue,
                 "countsTowardQuarterlyDays": resolvedCountsTowardQuarterlyDays,
                 "updatedAt": FieldValue.serverTimestamp(),
@@ -274,14 +292,32 @@ final class ReservationManager: ObservableObject {
                 return .failure(.resourceUnavailable)
             }
 
+            let startTimeValue: Any
+            if isAllDay {
+                startTimeValue = NSNull()
+            } else if let trimmedStartTime {
+                startTimeValue = trimmedStartTime
+            } else {
+                startTimeValue = NSNull()
+            }
+
+            let endTimeValue: Any
+            if isAllDay {
+                endTimeValue = NSNull()
+            } else if let trimmedEndTime {
+                endTimeValue = trimmedEndTime
+            } else {
+                endTimeValue = NSNull()
+            }
+
             try await db.collection("reservations").document(reservationID).updateData([
                 "title": trimmedTitle,
                 "notes": trimmedNotes,
                 "startDate": Timestamp(date: startDate),
                 "endDate": Timestamp(date: endDate),
                 "isAllDay": isAllDay,
-                "startTimeText": isAllDay ? nil : trimmedStartTime as Any,
-                "endTimeText": isAllDay ? nil : trimmedEndTime as Any,
+                "startTimeText": startTimeValue,
+                "endTimeText": endTimeValue,
                 "reservationMode": resolvedReservationMode.rawValue,
                 "countsTowardQuarterlyDays": resolvedCountsTowardQuarterlyDays,
                 "status": status.rawValue,
@@ -427,6 +463,20 @@ final class ReservationManager: ObservableObject {
                 updatedAt: Date()
             )
 
+            let startTimeValue: Any
+            if let startTimeText = record.startTimeText {
+                startTimeValue = startTimeText
+            } else {
+                startTimeValue = NSNull()
+            }
+
+            let endTimeValue: Any
+            if let endTimeText = record.endTimeText {
+                endTimeValue = endTimeText
+            } else {
+                endTimeValue = NSNull()
+            }
+
             try await document.setData([
                 "userId": record.userId,
                 "userEmail": record.userEmail,
@@ -438,8 +488,8 @@ final class ReservationManager: ObservableObject {
                 "startDate": Timestamp(date: record.startDate),
                 "endDate": Timestamp(date: record.endDate),
                 "isAllDay": record.isAllDay,
-                "startTimeText": record.startTimeText as Any,
-                "endTimeText": record.endTimeText as Any,
+                "startTimeText": startTimeValue,
+                "endTimeText": endTimeValue,
                 "reservationMode": record.reservationMode.rawValue,
                 "countsTowardQuarterlyDays": record.countsTowardQuarterlyDays,
                 "status": record.status.rawValue,
