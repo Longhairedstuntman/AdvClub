@@ -55,6 +55,34 @@ final class CalendarEntryManager: ObservableObject {
             }
     }
 
+    func startListeningAllEntries() {
+        entriesListener?.remove()
+
+        entriesListener = db.collection("calendarEntries")
+            .addSnapshotListener { [weak self] snapshot, error in
+                Task { @MainActor in
+                    guard let self else { return }
+
+                    if let error {
+                        self.errorMessage = error.localizedDescription
+                        return
+                    }
+
+                    guard let snapshot else {
+                        self.entries = []
+                        return
+                    }
+
+                    self.entries = snapshot.documents.compactMap { document in
+                        Self.makeEntry(from: document)
+                    }
+                    .sorted { $0.startDate > $1.startDate }
+
+                    self.errorMessage = nil
+                }
+            }
+    }
+
     func stopListening() {
         entriesListener?.remove()
         entriesListener = nil
@@ -93,7 +121,7 @@ final class CalendarEntryManager: ObservableObject {
             return .failure(.invalidDateRange)
         }
 
-        if entryType != .event {
+        if entryType == .reservation || entryType == .block {
             guard let trimmedResourceID, trimmedResourceID.isEmpty == false,
                   let trimmedResourceName, trimmedResourceName.isEmpty == false else {
                 return .failure(.missingResource)
@@ -163,6 +191,114 @@ final class CalendarEntryManager: ObservableObject {
         }
     }
 
+    func updateEntry(
+        entryID: String,
+        title: String,
+        entryType: CalendarEntryType,
+        resourceID: String?,
+        resourceName: String?,
+        startDate: Date,
+        endDate: Date,
+        isAllDay: Bool,
+        startTimeText: String?,
+        endTimeText: String?,
+        notes: String,
+        isPublished: Bool
+    ) async -> Result<CalendarEntryRecord, CalendarEntryError> {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedResourceID = resourceID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedResourceName = resourceName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedStartTime = startTimeText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEndTime = endTimeText?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard Auth.auth().currentUser != nil else {
+            return .failure(.missingAuthenticatedUser)
+        }
+
+        guard trimmedTitle.isEmpty == false else {
+            return .failure(.missingTitle)
+        }
+
+        guard endDate >= startDate else {
+            return .failure(.invalidDateRange)
+        }
+
+        if entryType == .reservation || entryType == .block {
+            guard let trimmedResourceID, trimmedResourceID.isEmpty == false,
+                  let trimmedResourceName, trimmedResourceName.isEmpty == false else {
+                return .failure(.missingResource)
+            }
+        }
+
+        if isAllDay == false {
+            guard let trimmedStartTime, trimmedStartTime.isEmpty == false,
+                  let trimmedEndTime, trimmedEndTime.isEmpty == false else {
+                return .failure(.missingTimeRange)
+            }
+        }
+
+        do {
+            let document = try await db.collection("calendarEntries").document(entryID).getDocument()
+            guard let existingEntry = Self.makeEntry(from: document) else {
+                return .failure(.entryNotFound)
+            }
+
+            let updatedRecord = CalendarEntryRecord(
+                id: entryID,
+                createdByUserID: existingEntry.createdByUserID,
+                createdByEmail: existingEntry.createdByEmail,
+                title: trimmedTitle,
+                entryType: entryType,
+                resourceID: entryType == .reservation || entryType == .block ? trimmedResourceID : nil,
+                resourceName: entryType == .reservation || entryType == .block ? trimmedResourceName : nil,
+                startDate: startDate,
+                endDate: endDate,
+                isAllDay: isAllDay,
+                startTimeText: isAllDay ? nil : trimmedStartTime,
+                endTimeText: isAllDay ? nil : trimmedEndTime,
+                notes: trimmedNotes,
+                isPublished: isPublished,
+                createdAt: existingEntry.createdAt,
+                updatedAt: Date()
+            )
+
+            try await db.collection("calendarEntries").document(entryID).updateData([
+                "title": updatedRecord.title,
+                "entryType": updatedRecord.entryType.rawValue,
+                "resourceID": updatedRecord.resourceID as Any,
+                "resourceName": updatedRecord.resourceName as Any,
+                "startDate": Timestamp(date: updatedRecord.startDate),
+                "endDate": Timestamp(date: updatedRecord.endDate),
+                "isAllDay": updatedRecord.isAllDay,
+                "startTimeText": updatedRecord.startTimeText as Any,
+                "endTimeText": updatedRecord.endTimeText as Any,
+                "notes": updatedRecord.notes,
+                "isPublished": updatedRecord.isPublished,
+                "updatedAt": FieldValue.serverTimestamp(),
+            ])
+
+            return .success(updatedRecord)
+        } catch {
+            errorMessage = error.localizedDescription
+            return .failure(.backendFailure(error.localizedDescription))
+        }
+    }
+
+    func deleteEntry(entryID: String) async -> Result<Void, CalendarEntryError> {
+        guard Auth.auth().currentUser != nil else {
+            return .failure(.missingAuthenticatedUser)
+        }
+
+        do {
+            try await db.collection("calendarEntries").document(entryID).delete()
+            return .success(())
+        } catch {
+            errorMessage = error.localizedDescription
+            return .failure(.backendFailure(error.localizedDescription))
+        }
+    }
+
     private static func makeEntry(from document: DocumentSnapshot) -> CalendarEntryRecord? {
         guard let data = document.data(),
               let createdByUserID = data["createdByUserID"] as? String,
@@ -225,6 +361,7 @@ enum CalendarEntryType: String, Codable {
     case event
     case reservation
     case block
+    case update
 }
 
 enum CalendarEntryError: LocalizedError {
@@ -233,6 +370,7 @@ enum CalendarEntryError: LocalizedError {
     case missingResource
     case invalidDateRange
     case missingTimeRange
+    case entryNotFound
     case backendFailure(String)
 
     var errorDescription: String? {
@@ -242,11 +380,13 @@ enum CalendarEntryError: LocalizedError {
         case .missingTitle:
             return "A title is required."
         case .missingResource:
-            return "Select a resource for reservation or block entries."
+            return "Select a resource for reservation or block entries. Club events and updates do not require a resource."
         case .invalidDateRange:
             return "The end date must be after the start date."
         case .missingTimeRange:
             return "Start and end times are required for non all-day entries."
+        case .entryNotFound:
+            return "The selected calendar entry could not be found."
         case .backendFailure(let message):
             return message
         }

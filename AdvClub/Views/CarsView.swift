@@ -11,7 +11,7 @@ struct CarsView: View {
     var body: some View {
         ZStack{
             VStack(){
-                Text("Cars View")
+                Text("Vehicle List")
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

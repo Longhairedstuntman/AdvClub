@@ -18,6 +18,7 @@ struct AdvClubApp: App {
     @StateObject private var resourceManager = ResourceManager()
     @StateObject private var reservationManager = ReservationManager()
     @StateObject private var calendarEntryManager = CalendarEntryManager()
+    @StateObject private var howToManager = HowToManager()
 
     init() {
         FirebaseApp.configure()
@@ -31,6 +32,8 @@ struct AdvClubApp: App {
                 .environmentObject(resourceManager)
                 .environmentObject(reservationManager)
                 .environmentObject(calendarEntryManager)
+                .environmentObject(howToManager)
+                .preferredColorScheme(.light)
         }
     }
 }
