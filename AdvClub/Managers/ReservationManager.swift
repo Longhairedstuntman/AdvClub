@@ -22,7 +22,7 @@ final class ReservationManager: ObservableObject {
         reservationsListener?.remove()
     }
 
-    func startListeningForCurrentUserReservations() {
+    func startListeningForVisibleReservations(isAdmin: Bool) {
         reservationsListener?.remove()
 
         guard let currentUserID = Auth.auth().currentUser?.uid else {
@@ -30,35 +30,304 @@ final class ReservationManager: ObservableObject {
             return
         }
 
-        reservationsListener = db.collection("reservations")
-            .whereField("userId", isEqualTo: currentUserID)
-            .addSnapshotListener { [weak self] snapshot, error in
-                Task { @MainActor in
-                    guard let self else { return }
+        let query: Query
+        if isAdmin {
+            query = db.collection("reservations")
+        } else {
+            query = db.collection("reservations")
+                .whereField("userId", isEqualTo: currentUserID)
+        }
 
-                    if let error {
-                        self.errorMessage = error.localizedDescription
-                        return
-                    }
+        reservationsListener = query.addSnapshotListener { [weak self] snapshot, error in
+            Task { @MainActor in
+                guard let self else { return }
 
-                    guard let snapshot else {
-                        self.reservations = []
-                        return
-                    }
-
-                    self.reservations = snapshot.documents.compactMap { document in
-                        Self.makeReservation(from: document)
-                    }
-                    .sorted { $0.startDate < $1.startDate }
-
-                    self.errorMessage = nil
+                if let error {
+                    self.errorMessage = error.localizedDescription
+                    return
                 }
+
+                guard let snapshot else {
+                    self.reservations = []
+                    return
+                }
+
+                self.reservations = snapshot.documents.compactMap { document in
+                    Self.makeReservation(from: document)
+                }
+                .sorted { $0.startDate < $1.startDate }
+
+                self.errorMessage = nil
             }
+        }
+    }
+
+    func startListeningForCurrentUserReservations() {
+        startListeningForVisibleReservations(isAdmin: false)
     }
 
     func stopListening() {
         reservationsListener?.remove()
         reservationsListener = nil
+    }
+
+    func cancelReservation(reservationID: String) async -> Result<Void, ReservationError> {
+        do {
+            let document = try await db.collection("reservations").document(reservationID).getDocument()
+            guard let reservation = Self.makeReservation(from: document) else {
+                return .failure(.reservationNotFound)
+            }
+
+            guard reservation.userId == Auth.auth().currentUser?.uid else {
+                return .failure(.notAuthorized)
+            }
+
+            guard canModifyReservation(reservation) else {
+                return .failure(.modificationWindowClosed)
+            }
+
+            try await db.collection("reservations").document(reservationID).updateData([
+                "status": ReservationStatus.cancelled.rawValue,
+                "updatedAt": FieldValue.serverTimestamp(),
+            ])
+
+            return .success(())
+        } catch {
+            errorMessage = error.localizedDescription
+            return .failure(.backendFailure(error.localizedDescription))
+        }
+    }
+
+    func updateReservation(
+        reservationID: String,
+        title: String,
+        startDate: Date,
+        endDate: Date,
+        isAllDay: Bool,
+        startTimeText: String?,
+        endTimeText: String?,
+        notes: String
+    ) async -> Result<ReservationRecord, ReservationError> {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedStartTime = startTimeText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEndTime = endTimeText?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard trimmedTitle.isEmpty == false else {
+            return .failure(.missingTitle)
+        }
+
+        guard endDate >= startDate else {
+            return .failure(.invalidDateRange)
+        }
+
+        do {
+            let document = try await db.collection("reservations").document(reservationID).getDocument()
+            guard let existingReservation = Self.makeReservation(from: document) else {
+                return .failure(.reservationNotFound)
+            }
+
+            guard existingReservation.userId == Auth.auth().currentUser?.uid else {
+                return .failure(.notAuthorized)
+            }
+
+            guard canModifyReservation(existingReservation) else {
+                return .failure(.modificationWindowClosed)
+            }
+
+            let resourceMetadata = await fetchResourceMetadata(resourceID: existingReservation.resourceID)
+            let resolvedReservationMode = resourceMetadata?.reservationMode ?? existingReservation.reservationMode
+            let resolvedCountsTowardQuarterlyDays = resourceMetadata?.countsTowardQuarterlyDays ?? existingReservation.countsTowardQuarterlyDays
+            let resolvedMaxConsecutiveHours = resourceMetadata?.maxConsecutiveHours
+
+            if isAllDay == false {
+                guard let trimmedStartTime, trimmedStartTime.isEmpty == false,
+                      let trimmedEndTime, trimmedEndTime.isEmpty == false else {
+                    return .failure(.missingTimeRange)
+                }
+
+                if resolvedReservationMode == .hourly,
+                   let resolvedMaxConsecutiveHours {
+                    guard Self.validateHourlyWindow(
+                        startTimeText: trimmedStartTime,
+                        endTimeText: trimmedEndTime,
+                        maxConsecutiveHours: resolvedMaxConsecutiveHours
+                    ) else {
+                        return .failure(.hourlyLimitExceeded(max: resolvedMaxConsecutiveHours))
+                    }
+                }
+            }
+
+            let hasConflict = await hasReservationConflict(
+                resourceID: existingReservation.resourceID,
+                startDate: startDate,
+                endDate: endDate,
+                excludingReservationID: reservationID
+            )
+
+            if hasConflict {
+                return .failure(.resourceUnavailable)
+            }
+
+            try await db.collection("reservations").document(reservationID).updateData([
+                "title": trimmedTitle,
+                "notes": trimmedNotes,
+                "startDate": Timestamp(date: startDate),
+                "endDate": Timestamp(date: endDate),
+                "isAllDay": isAllDay,
+                "startTimeText": isAllDay ? nil : trimmedStartTime as Any,
+                "endTimeText": isAllDay ? nil : trimmedEndTime as Any,
+                "reservationMode": resolvedReservationMode.rawValue,
+                "countsTowardQuarterlyDays": resolvedCountsTowardQuarterlyDays,
+                "updatedAt": FieldValue.serverTimestamp(),
+            ])
+
+            let updatedReservation = ReservationRecord(
+                id: reservationID,
+                userId: existingReservation.userId,
+                userEmail: existingReservation.userEmail,
+                userDisplayName: existingReservation.userDisplayName,
+                resourceID: existingReservation.resourceID,
+                resourceName: existingReservation.resourceName,
+                title: trimmedTitle,
+                notes: trimmedNotes,
+                startDate: startDate,
+                endDate: endDate,
+                isAllDay: isAllDay,
+                startTimeText: isAllDay ? nil : trimmedStartTime,
+                endTimeText: isAllDay ? nil : trimmedEndTime,
+                reservationMode: resolvedReservationMode,
+                countsTowardQuarterlyDays: resolvedCountsTowardQuarterlyDays,
+                status: existingReservation.status,
+                createdAt: existingReservation.createdAt,
+                updatedAt: Date()
+            )
+
+            return .success(updatedReservation)
+        } catch {
+            errorMessage = error.localizedDescription
+            return .failure(.backendFailure(error.localizedDescription))
+        }
+    }
+
+    func updateReservationAsAdmin(
+        reservationID: String,
+        title: String,
+        startDate: Date,
+        endDate: Date,
+        isAllDay: Bool,
+        startTimeText: String?,
+        endTimeText: String?,
+        notes: String,
+        status: ReservationStatus
+    ) async -> Result<ReservationRecord, ReservationError> {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedStartTime = startTimeText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEndTime = endTimeText?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard trimmedTitle.isEmpty == false else {
+            return .failure(.missingTitle)
+        }
+
+        guard endDate >= startDate else {
+            return .failure(.invalidDateRange)
+        }
+
+        do {
+            let document = try await db.collection("reservations").document(reservationID).getDocument()
+            guard let existingReservation = Self.makeReservation(from: document) else {
+                return .failure(.reservationNotFound)
+            }
+
+            let resourceMetadata = await fetchResourceMetadata(resourceID: existingReservation.resourceID)
+            let resolvedReservationMode = resourceMetadata?.reservationMode ?? existingReservation.reservationMode
+            let resolvedCountsTowardQuarterlyDays = resourceMetadata?.countsTowardQuarterlyDays ?? existingReservation.countsTowardQuarterlyDays
+            let resolvedMaxConsecutiveHours = resourceMetadata?.maxConsecutiveHours
+
+            if isAllDay == false {
+                guard let trimmedStartTime, trimmedStartTime.isEmpty == false,
+                      let trimmedEndTime, trimmedEndTime.isEmpty == false else {
+                    return .failure(.missingTimeRange)
+                }
+
+                if resolvedReservationMode == .hourly,
+                   let resolvedMaxConsecutiveHours {
+                    guard Self.validateHourlyWindow(
+                        startTimeText: trimmedStartTime,
+                        endTimeText: trimmedEndTime,
+                        maxConsecutiveHours: resolvedMaxConsecutiveHours
+                    ) else {
+                        return .failure(.hourlyLimitExceeded(max: resolvedMaxConsecutiveHours))
+                    }
+                }
+            }
+
+            let hasConflict = await hasReservationConflict(
+                resourceID: existingReservation.resourceID,
+                startDate: startDate,
+                endDate: endDate,
+                excludingReservationID: reservationID
+            )
+
+            if hasConflict {
+                return .failure(.resourceUnavailable)
+            }
+
+            try await db.collection("reservations").document(reservationID).updateData([
+                "title": trimmedTitle,
+                "notes": trimmedNotes,
+                "startDate": Timestamp(date: startDate),
+                "endDate": Timestamp(date: endDate),
+                "isAllDay": isAllDay,
+                "startTimeText": isAllDay ? nil : trimmedStartTime as Any,
+                "endTimeText": isAllDay ? nil : trimmedEndTime as Any,
+                "reservationMode": resolvedReservationMode.rawValue,
+                "countsTowardQuarterlyDays": resolvedCountsTowardQuarterlyDays,
+                "status": status.rawValue,
+                "updatedAt": FieldValue.serverTimestamp(),
+            ])
+
+            let updatedReservation = ReservationRecord(
+                id: reservationID,
+                userId: existingReservation.userId,
+                userEmail: existingReservation.userEmail,
+                userDisplayName: existingReservation.userDisplayName,
+                resourceID: existingReservation.resourceID,
+                resourceName: existingReservation.resourceName,
+                title: trimmedTitle,
+                notes: trimmedNotes,
+                startDate: startDate,
+                endDate: endDate,
+                isAllDay: isAllDay,
+                startTimeText: isAllDay ? nil : trimmedStartTime,
+                endTimeText: isAllDay ? nil : trimmedEndTime,
+                reservationMode: resolvedReservationMode,
+                countsTowardQuarterlyDays: resolvedCountsTowardQuarterlyDays,
+                status: status,
+                createdAt: existingReservation.createdAt,
+                updatedAt: Date()
+            )
+
+            return .success(updatedReservation)
+        } catch {
+            errorMessage = error.localizedDescription
+            return .failure(.backendFailure(error.localizedDescription))
+        }
+    }
+
+    func deleteReservationAsAdmin(reservationID: String) async -> Result<Void, ReservationError> {
+        guard Auth.auth().currentUser != nil else {
+            return .failure(.missingAuthenticatedUser)
+        }
+
+        do {
+            try await db.collection("reservations").document(reservationID).delete()
+            return .success(())
+        } catch {
+            errorMessage = error.localizedDescription
+            return .failure(.backendFailure(error.localizedDescription))
+        }
     }
 
     func createReservation(
@@ -127,7 +396,8 @@ final class ReservationManager: ObservableObject {
         let hasConflict = await hasReservationConflict(
             resourceID: trimmedResourceID,
             startDate: startDate,
-            endDate: endDate
+            endDate: endDate,
+            excludingReservationID: nil
         )
 
         if hasConflict {
@@ -209,12 +479,14 @@ final class ReservationManager: ObservableObject {
     private func hasReservationConflict(
         resourceID: String,
         startDate: Date,
-        endDate: Date
+        endDate: Date,
+        excludingReservationID: String?
     ) async -> Bool {
         async let reservationConflict = hasReservationCollectionConflict(
             resourceID: resourceID,
             startDate: startDate,
-            endDate: endDate
+            endDate: endDate,
+            excludingReservationID: excludingReservationID
         )
         async let calendarEntryConflict = hasCalendarEntryConflict(
             resourceID: resourceID,
@@ -230,7 +502,8 @@ final class ReservationManager: ObservableObject {
     private func hasReservationCollectionConflict(
         resourceID: String,
         startDate: Date,
-        endDate: Date
+        endDate: Date,
+        excludingReservationID: String?
     ) async -> Bool {
         do {
             let snapshot = try await db.collection("reservations")
@@ -238,6 +511,10 @@ final class ReservationManager: ObservableObject {
                 .getDocuments()
 
             return snapshot.documents.contains { document in
+                if let excludingReservationID, document.documentID == excludingReservationID {
+                    return false
+                }
+
                 guard let reservation = Self.makeReservation(from: document) else { return false }
                 guard reservation.status != .denied && reservation.status != .cancelled else { return false }
                 return Self.dateRangesOverlap(
@@ -250,6 +527,12 @@ final class ReservationManager: ObservableObject {
         } catch {
             return false
         }
+    }
+    private func canModifyReservation(_ reservation: ReservationRecord, relativeTo date: Date = Date()) -> Bool {
+        let todayStart = Calendar.current.startOfDay(for: date)
+        return reservation.endDate >= todayStart
+            && reservation.status != .cancelled
+            && reservation.status != .denied
     }
 
     private func hasCalendarEntryConflict(
@@ -555,6 +838,9 @@ enum ReservationError: LocalizedError {
     case missingTimeRange
     case hourlyLimitExceeded(max: Int)
     case resourceUnavailable
+    case reservationNotFound
+    case modificationWindowClosed
+    case notAuthorized
     case backendFailure(String)
 
     var errorDescription: String? {
@@ -573,6 +859,12 @@ enum ReservationError: LocalizedError {
             return "This hourly reservation is limited to \(max) consecutive hours."
         case .resourceUnavailable:
             return "That resource is already reserved for the selected day or date range."
+        case .reservationNotFound:
+            return "The reservation could not be found."
+        case .modificationWindowClosed:
+            return "This reservation can no longer be edited or cancelled after the reservation day has passed."
+        case .notAuthorized:
+            return "You are not allowed to modify this reservation."
         case .backendFailure(let message):
             return message
         }

@@ -8,6 +8,7 @@
 import Foundation
 
 enum UserRole: String, Codable {
+    case superAdmin
     case admin
     case member
 }

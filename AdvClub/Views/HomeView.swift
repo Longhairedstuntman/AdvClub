@@ -33,10 +33,33 @@ struct HomeView: View {
             .first
     }
 
-    private var upcomingClubEvents: [CalendarEntryRecord] {
+    private var homeFeedEntries: [CalendarEntryRecord] {
         calendarEntryManager.entries
-            .filter { $0.entryType == .event && $0.endDate >= Calendar.current.startOfDay(for: Date()) }
-            .sorted { $0.startDate < $1.startDate }
+            .filter { entry in
+                switch entry.entryType {
+                case .event:
+                    return entry.endDate >= Calendar.current.startOfDay(for: Date())
+                case .update:
+                    return true
+                case .reservation, .block:
+                    return false
+                }
+            }
+            .sorted { lhs, rhs in
+                if lhs.entryType == rhs.entryType {
+                    return lhs.startDate < rhs.startDate
+                }
+
+                if lhs.entryType == .update {
+                    return false
+                }
+
+                if rhs.entryType == .update {
+                    return true
+                }
+
+                return lhs.startDate < rhs.startDate
+            }
     }
 
     private var upcomingReservations: [ReservationRecord] {
@@ -116,19 +139,19 @@ struct HomeView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            if upcomingClubEvents.isEmpty {
+            if homeFeedEntries.isEmpty {
                 Text("No events or club updates have been published yet.")
                     .foregroundStyle(.white.opacity(0.68))
             } else {
-                ForEach(upcomingClubEvents.prefix(6)) { event in
+                ForEach(homeFeedEntries.prefix(6)) { entry in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text(event.title)
+                            Text(entry.title)
                                 .font(.headline)
 
                             Spacer()
 
-                            Text("Club Event")
+                            Text(entry.entryType == .update ? "Club Update" : "Club Event")
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 10)
@@ -137,18 +160,20 @@ struct HomeView: View {
                                 .clipShape(Capsule())
                         }
 
-                        Text(dateFormatter.string(from: event.startDate))
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.7))
+                        if entry.entryType == .event {
+                            Text(dateFormatter.string(from: entry.startDate))
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
 
-                        Text(event.notes.isEmpty ? "Upcoming club event." : event.notes)
+                        Text(entry.notes.isEmpty ? (entry.entryType == .update ? "Club update." : "Upcoming club event.") : entry.notes)
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.68))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 4)
 
-                    if event.id != upcomingClubEvents.prefix(6).last?.id {
+                    if entry.id != homeFeedEntries.prefix(6).last?.id {
                         Divider()
                             .overlay(Color.white.opacity(0.08))
                     }

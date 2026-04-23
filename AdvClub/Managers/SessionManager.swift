@@ -41,8 +41,12 @@ final class SessionManager: ObservableObject {
         Auth.auth().currentUser != nil
     }
 
+    var isSuperAdmin: Bool {
+        currentUser?.role == .superAdmin
+    }
+
     var isAdmin: Bool {
-        currentUser?.role == .admin
+        currentUser?.role == .admin || currentUser?.role == .superAdmin
     }
 
     var isMember: Bool {
@@ -112,6 +116,16 @@ final class SessionManager: ObservableObject {
             return .failure(.missingDisplayName)
         }
 
+        guard isAdmin else {
+            return .failure(.notAuthorized)
+        }
+
+        if role == .admin || role == .superAdmin {
+            guard isSuperAdmin else {
+                return .failure(.notAuthorized)
+            }
+        }
+
         do {
             let callable = functions.httpsCallable("createUser")
             let result = try await callable.call([
@@ -126,7 +140,7 @@ final class SessionManager: ObservableObject {
                   let returnedEmail = data["email"] as? String,
                   let returnedDisplayName = data["displayName"] as? String,
                   let returnedRoleRaw = data["role"] as? String,
-                  let returnedRole = UserRole(rawValue: returnedRoleRaw),
+                  let returnedRole = decodeRole(returnedRoleRaw),
                   let isActive = data["isActive"] as? Bool else {
                 return .failure(.backendNotConfigured)
             }
@@ -192,6 +206,22 @@ final class SessionManager: ObservableObject {
             return .failure(.userNotFound)
         }
 
+        guard canModifyUser(existingUser) else {
+            return .failure(.notAuthorized)
+        }
+
+        if role == .superAdmin {
+            guard isSuperAdmin else {
+                return .failure(.notAuthorized)
+            }
+        }
+
+        if isSuperAdmin == false && role == .admin {
+            guard existingUser.role == .member else {
+                return .failure(.notAuthorized)
+            }
+        }
+
         if normalizedEmail != existingUser.email {
             return .failure(.backendNotConfigured)
         }
@@ -249,6 +279,12 @@ final class SessionManager: ObservableObject {
             return
         }
 
+        guard let targetUser = users.first(where: { $0.id == userID }) ?? currentUser,
+              canModifyUser(targetUser) else {
+            loginErrorMessage = SessionError.notAuthorized.localizedDescription
+            return
+        }
+
         Task {
             do {
                 try await db.collection("users").document(userID).updateData([
@@ -265,6 +301,12 @@ final class SessionManager: ObservableObject {
 
     func deleteUser(userID: String) {
         guard isAdmin else {
+            loginErrorMessage = SessionError.notAuthorized.localizedDescription
+            return
+        }
+
+        guard let targetUser = users.first(where: { $0.id == userID }) ?? currentUser,
+              canModifyUser(targetUser) else {
             loginErrorMessage = SessionError.notAuthorized.localizedDescription
             return
         }
@@ -339,7 +381,7 @@ final class SessionManager: ObservableObject {
                 
                 self.loginErrorMessage = nil
 
-                if user.role == .admin {
+                if user.role == .admin || user.role == .superAdmin {
                     self.listenToUsersCollection()
                 } else {
                     self.usersListener?.remove()
@@ -384,7 +426,7 @@ final class SessionManager: ObservableObject {
         guard let email = data["email"] as? String,
               let displayName = data["displayName"] as? String,
               let roleRawValue = data["role"] as? String,
-              let role = UserRole(rawValue: roleRawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()),
+              let role = decodeRole(roleRawValue),
               let isActive = data["isActive"] as? Bool else {
             return nil
         }
@@ -402,6 +444,33 @@ final class SessionManager: ObservableObject {
             isActive: isActive,
             quarterlyAllowance: quarterlyAllowance
         )
+    }
+
+    private func canModifyUser(_ targetUser: AppUser) -> Bool {
+        guard let currentUser else { return false }
+
+        if currentUser.role == .superAdmin {
+            return true
+        }
+
+        if currentUser.role == .admin {
+            return targetUser.role == .member
+        }
+
+        return currentUser.id == targetUser.id
+    }
+
+    private func decodeRole(_ rawValue: String) -> UserRole? {
+        switch rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "member":
+            return .member
+        case "admin":
+            return .admin
+        case "superadmin", "super_admin", "super admin":
+            return .superAdmin
+        default:
+            return nil
+        }
     }
 
     private func updateCurrentUserPassword(to newPassword: String) async throws {

@@ -47,7 +47,7 @@ struct CalendarView: View {
         .background(Color.appBackgroundColor)
         .task {
             calendarEntryManager.startListeningPublishedEntries()
-            reservationManager.startListeningForCurrentUserReservations()
+            reservationManager.startListeningForVisibleReservations(isAdmin: sessionManager.isAdmin)
         }
         .toolbar {
             if sessionManager.isMember || sessionManager.isAdmin {
@@ -356,6 +356,7 @@ struct CalendarView: View {
 
     private func firebaseItems(for month: CalendarMonth) -> [CalendarListItem] {
         calendarEntryManager.entries.compactMap { entry in
+            guard entry.entryType != .update else { return nil }
             guard entryBelongsToMonth(entry, month: month) else { return nil }
             return makeCalendarListItem(from: entry)
         }
@@ -387,15 +388,15 @@ struct CalendarView: View {
         guard let dayNumber else { return [] }
 
         return calendarEntryManager.entries.compactMap { entry in
+            guard entry.entryType != .update else { return nil }
             guard entryContainsDay(entry, dayNumber: dayNumber, month: month) else { return nil }
             return makeCalendarListItem(from: entry)
         }
     }
 
     private func effectiveCategories(for day: CalendarDay, month: CalendarMonth) -> [CalendarItemCategory] {
-        let firebaseCategories = firebaseItems(forDayNumber: day.number, month: month).map(\.category)
-        let reservationCategories = reservationItems(forDayNumber: day.number, month: month).map(\.category)
-        return Array((day.categories + firebaseCategories + reservationCategories).prefix(3))
+        let visibleItems = filteredItems(for: mergedItems(for: day, month: month))
+        return Array(visibleItems.map(\.category).prefix(3))
     }
 
     private func entryBelongsToMonth(_ entry: CalendarEntryRecord, month: CalendarMonth) -> Bool {
@@ -502,7 +503,13 @@ struct CalendarView: View {
         case .event:
             category = .event
         case .reservation, .block:
-            category = .groupReservation
+            if entry.createdByUserID == sessionManager.currentUser?.id {
+                category = .myReservation
+            } else {
+                category = .groupReservation
+            }
+        case .update:
+            category = .event
         }
 
         let subtitle: String
@@ -521,6 +528,8 @@ struct CalendarView: View {
             } else {
                 subtitle = "Blocked"
             }
+        case .update:
+            subtitle = "Club update"
         }
 
         let dateText: String
@@ -570,11 +579,15 @@ struct CalendarView: View {
             }
         }
 
+        let isCurrentUsersReservation = reservation.userId == sessionManager.currentUser?.id
+
         return CalendarListItem(
             title: reservation.title,
-            subtitle: "My reservation • \(reservation.resourceName)",
+            subtitle: isCurrentUsersReservation
+                ? "My reservation • \(reservation.resourceName)"
+                : "Reserved • \(reservation.resourceName)",
             dateText: dateText,
-            category: .myReservation
+            category: isCurrentUsersReservation ? .myReservation : .groupReservation
         )
     }
 
@@ -617,12 +630,6 @@ struct CalendarView: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(day.isToday ? Color.white.opacity(0.14) : Color.white.opacity(0.05))
                     .frame(height: 56)
-
-                if selectedDisplayStyle == .highlight, categories.isEmpty == false {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(categories.first?.color.opacity(0.22) ?? Color.clear)
-                        .frame(height: 56)
-                }
 
                 if let number = day.number {
                     Text("\(number)")
@@ -842,6 +849,47 @@ private struct AdminCalendarEntrySheet: View {
             return .reservation
         case .block:
             return .block
+        case .update:
+            return .update
+        }
+    }
+    
+    private var requiresSingleDayReservation: Bool {
+        guard let selectedResource else { return false }
+        return selectedResource.reservationMode == .hourly
+    }
+
+    private var startTimeOptions: [String] {
+        (0...23).map(timeLabel(forHour:))
+    }
+
+    private var availableEndTimeOptions: [String] {
+        endTimeOptions(from: startTime)
+    }
+
+    private func timeLabel(forHour hour: Int) -> String {
+        let normalizedHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour)
+        let meridiem = hour < 12 ? "AM" : "PM"
+        return "\(normalizedHour):00 \(meridiem)"
+    }
+
+    private func hourValue(from timeText: String) -> Int? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mm a"
+
+        guard let date = formatter.date(from: timeText) else { return nil }
+        return Calendar.current.component(.hour, from: date)
+    }
+
+    private func endTimeOptions(from startTimeText: String) -> [String] {
+        guard let startHour = hourValue(from: startTimeText) else { return [] }
+        let maxHours = selectedResource?.maxConsecutiveHours ?? 5
+        let endHourUpperBound = min(startHour + maxHours, 24)
+        guard startHour + 1 <= endHourUpperBound else { return [] }
+
+        return Array((startHour + 1)...endHourUpperBound).map { hour in
+            timeLabel(forHour: hour == 24 ? 0 : hour)
         }
     }
 
@@ -861,7 +909,7 @@ private struct AdminCalendarEntrySheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Calendar Entry")
+                        Text("Admin Entry")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
 
                         Text(prefilledDateTitle)
@@ -872,6 +920,7 @@ private struct AdminCalendarEntrySheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Entry Type")
                             .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.black)
 
                         Picker("Entry Type", selection: $entryType) {
                             ForEach(AdminCalendarEntryType.allCases) { type in
@@ -893,7 +942,7 @@ private struct AdminCalendarEntrySheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
 
-                    if entryType != .event {
+                    if entryType == .reservation || entryType == .block {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Resource")
                                 .font(.subheadline.weight(.semibold))
@@ -912,6 +961,7 @@ private struct AdminCalendarEntrySheet: View {
                                         Text(resource.name).tag(resource.id)
                                     }
                                 }
+                                .foregroundStyle(.black)
                                 .pickerStyle(.menu)
                                 .padding()
                                 .background(Color(.secondarySystemBackground))
@@ -920,69 +970,124 @@ private struct AdminCalendarEntrySheet: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Start Date")
-                            .font(.subheadline.weight(.semibold))
-
-                        DatePicker(
-                            "Start Date",
-                            selection: $startDate,
-                            displayedComponents: .date
-                        )
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                        .tint(.black)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("End Date")
-                            .font(.subheadline.weight(.semibold))
-
-                        DatePicker(
-                            "End Date",
-                            selection: $endDate,
-                            displayedComponents: .date
-                        )
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                        .tint(.black)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    }
-
-                    Toggle("All Day", isOn: $isAllDay)
-                        .tint(.black)
-
-                    if isAllDay == false {
-                        HStack(spacing: 12) {
+                    if entryType != .update {
+                        if requiresSingleDayReservation {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Start Time")
+                                Text("Reservation Date")
                                     .font(.subheadline.weight(.semibold))
 
-                                TextField("Start time", text: $startTime)
+                                DatePicker(
+                                    "Reservation Date",
+                                    selection: $startDate,
+                                    displayedComponents: .date
+                                )
+                                .datePickerStyle(.compact)
+                                .labelsHidden()
+                                .tint(.black)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                                .background(Color(.secondarySystemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            }
+
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Start Time")
+                                        .font(.subheadline.weight(.semibold))
+
+                                    Picker("Start Time", selection: $startTime) {
+                                        ForEach(startTimeOptions, id: \.self) { option in
+                                            Text(option).tag(option)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .tint(.black)
                                     .padding()
                                     .background(Color(.secondarySystemBackground))
                                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                }
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("End Time")
+                                        .font(.subheadline.weight(.semibold))
+
+                                    Picker("End Time", selection: $endTime) {
+                                        ForEach(availableEndTimeOptions, id: \.self) { option in
+                                            Text(option).tag(option)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .tint(.black)
+                                    .padding()
+                                    .background(Color(.secondarySystemBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                }
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Start Date")
+                                    .font(.subheadline.weight(.semibold))
+
+                                DatePicker(
+                                    "Start Date",
+                                    selection: $startDate,
+                                    displayedComponents: .date
+                                )
+                                .datePickerStyle(.compact)
+                                .labelsHidden()
+                                .tint(.black)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                                .background(Color(.secondarySystemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
 
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("End Time")
+                                Text("End Date")
                                     .font(.subheadline.weight(.semibold))
 
-                                TextField("End time", text: $endTime)
-                                    .padding()
-                                    .background(Color(.secondarySystemBackground))
-                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                DatePicker(
+                                    "End Date",
+                                    selection: $endDate,
+                                    displayedComponents: .date
+                                )
+                                .datePickerStyle(.compact)
+                                .labelsHidden()
+                                .tint(.black)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                                .background(Color(.secondarySystemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            }
+
+                            Toggle("All Day", isOn: $isAllDay)
+                                .tint(.black)
+
+                            if isAllDay == false {
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Start Time")
+                                            .font(.subheadline.weight(.semibold))
+
+                                        TextField("Start time", text: $startTime)
+                                            .padding()
+                                            .background(Color(.secondarySystemBackground))
+                                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("End Time")
+                                            .font(.subheadline.weight(.semibold))
+
+                                        TextField("End time", text: $endTime)
+                                            .padding()
+                                            .background(Color(.secondarySystemBackground))
+                                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    }
+                                }
                             }
                         }
                     }
-
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Notes")
                             .font(.subheadline.weight(.semibold))
@@ -1013,7 +1118,7 @@ private struct AdminCalendarEntrySheet: View {
                                 .foregroundStyle(.white)
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
-                        .disabled(isSaving || (entryType != .event && selectedResource == nil))
+                        .disabled(isSaving || ((entryType == .reservation || entryType == .block) && selectedResource == nil))
 
                         Button {
                             dismiss()
@@ -1023,7 +1128,7 @@ private struct AdminCalendarEntrySheet: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                                 .background(Color(.secondarySystemBackground))
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(.black)
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
 
@@ -1037,7 +1142,7 @@ private struct AdminCalendarEntrySheet: View {
                 }
                 .padding(24)
             }
-            .navigationTitle("Calendar Entry")
+            .navigationTitle("Admin Entry")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 if selectedResourceID.isEmpty {
@@ -1049,6 +1154,36 @@ private struct AdminCalendarEntrySheet: View {
                     selectedResourceID = newResources.first?.id ?? ""
                 }
             }
+            .onChange(of: selectedResourceID) { _, _ in
+                if requiresSingleDayReservation {
+                    endDate = startDate
+                    isAllDay = false
+                    startTime = "9:00 AM"
+                    endTime = "10:00 AM"
+                }
+            }
+            .onChange(of: startDate) { _, newValue in
+                if requiresSingleDayReservation {
+                    endDate = newValue
+                } else if endDate < newValue {
+                    endDate = newValue
+                }
+            }
+            .onChange(of: endDate) { _, newValue in
+                if requiresSingleDayReservation {
+                    startDate = newValue
+                } else if newValue < startDate {
+                    startDate = newValue
+                }
+            }
+            .onChange(of: startTime) { _, newValue in
+                if requiresSingleDayReservation {
+                    let validEndOptions = endTimeOptions(from: newValue)
+                    if validEndOptions.contains(endTime) == false {
+                        endTime = validEndOptions.first ?? endTime
+                    }
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -1058,7 +1193,7 @@ private struct AdminCalendarEntrySheet: View {
                     } label: {
                         Text(isSaving ? "Saving..." : "Save")
                     }
-                    .disabled(isSaving || (entryType != .event && selectedResource == nil))
+                    .disabled(isSaving || ((entryType == .reservation || entryType == .block) && selectedResource == nil))
                     .foregroundStyle(.black)
                 }
 
@@ -1076,16 +1211,22 @@ private struct AdminCalendarEntrySheet: View {
         isSaving = true
         defer { isSaving = false }
 
+
+        let shouldForceSingleDay = entryType != .update && requiresSingleDayReservation
+        let resolvedStartDate = entryType == .update ? initialDate : startDate
+        let resolvedEndDate = entryType == .update ? initialDate : (shouldForceSingleDay ? startDate : endDate)
+        let resolvedIsAllDay = entryType == .update ? true : (shouldForceSingleDay ? false : isAllDay)
+
         let result = await calendarEntryManager.createEntry(
             title: title,
             entryType: calendarEntryType,
-            resourceID: entryType == .event ? nil : selectedResource?.id,
-            resourceName: entryType == .event ? nil : selectedResource?.name,
-            startDate: startDate,
-            endDate: endDate,
-            isAllDay: isAllDay,
-            startTimeText: isAllDay ? nil : startTime,
-            endTimeText: isAllDay ? nil : endTime,
+            resourceID: (entryType == .reservation || entryType == .block) ? selectedResource?.id : nil,
+            resourceName: (entryType == .reservation || entryType == .block) ? selectedResource?.name : nil,
+            startDate: resolvedStartDate,
+            endDate: resolvedEndDate,
+            isAllDay: resolvedIsAllDay,
+            startTimeText: resolvedIsAllDay ? nil : startTime,
+            endTimeText: resolvedIsAllDay ? nil : endTime,
             notes: notes,
             isPublished: isPublished
         )
@@ -1138,21 +1279,49 @@ private struct CalendarReservationFormSheet: View {
 
     private var selectedReservationMode: ReservationMode {
         guard let selectedResource else { return .daily }
-        return selectedResource.name == "Golf Simulator" ? .hourly : .daily
+        return selectedResource.reservationMode == .hourly ? .hourly : .daily
     }
 
     private var countsTowardQuarterlyDays: Bool {
-        guard let selectedResource else { return false }
+        selectedResource?.countsTowardQuarterlyDays ?? false
+    }
 
-        let normalizedName = selectedResource.name.lowercased()
-        return normalizedName == "car"
-            || normalizedName == "cars"
-            || normalizedName == "boat"
-            || normalizedName == "boats"
-            || normalizedName == "side by side"
-            || normalizedName == "side-by-side"
-            || normalizedName == "side by sides"
-            || normalizedName == "side-by-sides"
+    private var requiresSingleDayReservation: Bool {
+        selectedReservationMode == .hourly
+    }
+
+    private var startTimeOptions: [String] {
+        (0...23).map(timeLabel(forHour:))
+    }
+
+    private var availableEndTimeOptions: [String] {
+        endTimeOptions(from: startTime)
+    }
+
+    private func timeLabel(forHour hour: Int) -> String {
+        let normalizedHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour)
+        let meridiem = hour < 12 ? "AM" : "PM"
+        return "\(normalizedHour):00 \(meridiem)"
+    }
+
+    private func hourValue(from timeText: String) -> Int? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mm a"
+
+        guard let date = formatter.date(from: timeText) else { return nil }
+        return Calendar.current.component(.hour, from: date)
+    }
+
+    private func endTimeOptions(from startTimeText: String) -> [String] {
+        guard let startHour = hourValue(from: startTimeText) else { return [] }
+        let maxHours = selectedResource?.maxConsecutiveHours ?? 5
+        let endHourUpperBound = min(startHour + maxHours, 24)
+        guard startHour + 1 <= endHourUpperBound else { return [] }
+
+        return Array((startHour + 1)...endHourUpperBound).map { hour in
+            timeLabel(forHour: hour == 24 ? 0 : hour)
+        }
     }
 
     var body: some View {
@@ -1171,6 +1340,36 @@ private struct CalendarReservationFormSheet: View {
             .onChange(of: enabledResources) { _, newResources in
                 if newResources.contains(where: { $0.id == selectedResourceID }) == false {
                     selectedResourceID = newResources.first?.id ?? ""
+                }
+            }
+            .onChange(of: selectedResourceID) { _, _ in
+                if requiresSingleDayReservation {
+                    endDate = startDate
+                    isAllDay = false
+                    startTime = "9:00 AM"
+                    endTime = "10:00 AM"
+                }
+            }
+            .onChange(of: startDate) { _, newValue in
+                if requiresSingleDayReservation {
+                    endDate = newValue
+                } else if endDate < newValue {
+                    endDate = newValue
+                }
+            }
+            .onChange(of: endDate) { _, newValue in
+                if requiresSingleDayReservation {
+                    startDate = newValue
+                } else if newValue < startDate {
+                    startDate = newValue
+                }
+            }
+            .onChange(of: startTime) { _, newValue in
+                if requiresSingleDayReservation {
+                    let validEndOptions = endTimeOptions(from: newValue)
+                    if validEndOptions.contains(endTime) == false {
+                        endTime = validEndOptions.first ?? endTime
+                    }
                 }
             }
             .toolbar {
@@ -1249,66 +1448,132 @@ private struct CalendarReservationFormSheet: View {
             .tint(.black)
             .colorScheme(.light)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Start Date")
-                    .font(.subheadline.weight(.semibold))
+            if requiresSingleDayReservation {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Reservation Date")
+                        .font(.subheadline.weight(.semibold))
 
-                DatePicker(
-                    "Start Date",
-                    selection: $startDate,
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                .tint(.black)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
+                    DatePicker(
+                        "Reservation Date",
+                        selection: $startDate,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                    .tint(.black)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("End Date")
-                    .font(.subheadline.weight(.semibold))
-
-                DatePicker(
-                    "End Date",
-                    selection: $endDate,
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                .tint(.black)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-
-            Toggle("All Day", isOn: $isAllDay)
-                .tint(.black)
-
-            if isAllDay == false {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Start Time")
                             .font(.subheadline.weight(.semibold))
 
-                        TextField("Start time", text: $startTime)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        Picker("Start Time", selection: $startTime) {
+                            ForEach(startTimeOptions, id: \.self) { option in
+                                Text(option).tag(option)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(.black)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("End Time")
                             .font(.subheadline.weight(.semibold))
 
-                        TextField("End time", text: $endTime)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        Picker("End Time", selection: $endTime) {
+                            ForEach(availableEndTimeOptions, id: \.self) { option in
+                                Text(option).tag(option)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(.black)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Start Date")
+                        .font(.subheadline.weight(.semibold))
+
+                    DatePicker(
+                        "Start Date",
+                        selection: $startDate,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                    .tint(.black)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("End Date")
+                        .font(.subheadline.weight(.semibold))
+
+                    DatePicker(
+                        "End Date",
+                        selection: $endDate,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                    .tint(.black)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+
+                Toggle("All Day", isOn: $isAllDay)
+                    .tint(.black)
+
+                if isAllDay == false {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Start Time")
+                                        .font(.subheadline.weight(.semibold))
+
+                                    Picker("Start Time", selection: $startTime) {
+                                        ForEach(startTimeOptions, id: \.self) { option in
+                                            Text(option).tag(option)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .tint(.black)
+                                    .padding()
+                                    .background(Color(.secondarySystemBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                }
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("End Time")
+                                        .font(.subheadline.weight(.semibold))
+
+                                    Picker("End Time", selection: $endTime) {
+                                        ForEach(availableEndTimeOptions, id: \.self) { option in
+                                            Text(option).tag(option)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .tint(.black)
+                                    .padding()
+                                    .background(Color(.secondarySystemBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                }
+                            }
                 }
             }
 
@@ -1364,6 +1629,28 @@ private struct CalendarReservationFormSheet: View {
     }
     
     private func hasReservationConflict(for resource: ReservableResourceItem) -> Bool {
+        if requiresSingleDayReservation {
+            let entryConflict = calendarEntryManager.entries.contains { entry in
+                guard entry.entryType == .reservation || entry.entryType == .block else { return false }
+                guard entry.resourceID == resource.id else { return false }
+                guard Calendar.current.isDate(entry.startDate, inSameDayAs: startDate) else { return false }
+                return timeRangesOverlap(startTime, endTime, entry.startTimeText, entry.endTimeText)
+            }
+
+            if entryConflict {
+                return true
+            }
+
+            let reservationConflict = reservationManager.reservations.contains { reservation in
+                guard reservation.resourceID == resource.id else { return false }
+                guard reservation.status != .denied && reservation.status != .cancelled else { return false }
+                guard Calendar.current.isDate(reservation.startDate, inSameDayAs: startDate) else { return false }
+                return timeRangesOverlap(startTime, endTime, reservation.startTimeText, reservation.endTimeText)
+            }
+
+            return reservationConflict
+        }
+
         let entryConflict = calendarEntryManager.entries.contains { entry in
             guard entry.entryType == .reservation || entry.entryType == .block else { return false }
             guard entry.resourceID == resource.id else { return false }
@@ -1391,6 +1678,25 @@ private struct CalendarReservationFormSheet: View {
         let rightEnd = calendar.startOfDay(for: rhsEnd)
 
         return leftStart <= rightEnd && rightStart <= leftEnd
+    }
+
+    private func timeRangesOverlap(_ lhsStartText: String, _ lhsEndText: String, _ rhsStartText: String?, _ rhsEndText: String?) -> Bool {
+        guard let rhsStartText, let rhsEndText else {
+            return true
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mm a"
+
+        guard let lhsStart = formatter.date(from: lhsStartText),
+              let lhsEnd = formatter.date(from: lhsEndText),
+              let rhsStart = formatter.date(from: rhsStartText),
+              let rhsEnd = formatter.date(from: rhsEndText) else {
+            return true
+        }
+
+        return lhsStart < rhsEnd && rhsStart < lhsEnd
     }
 
     private func saveReservation() async {
@@ -1490,7 +1796,6 @@ private enum CalendarFilter: String, CaseIterable, Identifiable {
 private enum CalendarDisplayStyle: String, CaseIterable, Identifiable {
     case dots
     case bars
-    case highlight
 
     var id: String { rawValue }
 
@@ -1500,8 +1805,6 @@ private enum CalendarDisplayStyle: String, CaseIterable, Identifiable {
             return "Dots"
         case .bars:
             return "Bars"
-        case .highlight:
-            return "Fill"
         }
     }
 }
@@ -1607,6 +1910,7 @@ private enum AdminCalendarEntryType: String, CaseIterable, Identifiable {
     case event
     case reservation
     case block
+    case update
 
     var id: String { rawValue }
 
@@ -1618,6 +1922,8 @@ private enum AdminCalendarEntryType: String, CaseIterable, Identifiable {
             return "Reserve"
         case .block:
             return "Block"
+        case .update:
+            return "Club Update"
         }
     }
 }

@@ -12,6 +12,8 @@ import Combine
 struct AdminView: View {
     @EnvironmentObject private var sessionManager: SessionManager
     @State private var isPresentingResourceManagementSheet = false
+    @State private var isPresentingUserManagementSheet = false
+    @State private var isPresentingContentManagementSheet = false
 
     var body: some View {
         ScrollView {
@@ -22,8 +24,8 @@ struct AdminView: View {
                 Text("Manage users, content, and app administration tools.")
                     .foregroundStyle(.white.opacity(0.72))
 
-                NavigationLink {
-                    UserManagementView()
+                Button {
+                    isPresentingUserManagementSheet = true
                 } label: {
                     adminCard(
                         title: "User Management",
@@ -33,12 +35,12 @@ struct AdminView: View {
                 }
                 .buttonStyle(.plain)
 
-                NavigationLink {
-                    ContentManagementView()
+                Button {
+                    isPresentingContentManagementSheet = true
                 } label: {
                     adminCard(
                         title: "Content Management",
-                        subtitle: "Create and manage spotlight events, updates, and app content.",
+                        subtitle: "Manage events, updates, and app content.",
                         systemImage: "square.and.pencil"
                     )
                 }
@@ -71,6 +73,12 @@ struct AdminView: View {
             .foregroundStyle(.white)
         }
         .background(Color.appBackgroundColor)
+        .sheet(isPresented: $isPresentingUserManagementSheet) {
+                UserManagementView()
+        }
+        .sheet(isPresented: $isPresentingContentManagementSheet) {
+                ContentManagementView()
+        }
         .sheet(isPresented: $isPresentingResourceManagementSheet) {
             ResourceManagementView()
         }
