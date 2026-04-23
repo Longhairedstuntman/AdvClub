@@ -125,9 +125,41 @@ private struct ClubContentAdminPage: View {
     @State private var message: String?
     @State private var deletingEntryID: String?
     @State private var editingEntry: CalendarEntryRecord?
+    @State private var searchText = ""
+    @State private var expandedSections: Set<String> = []
 
-    private var sortedEntries: [CalendarEntryRecord] {
-        calendarEntryManager.entries.sorted { $0.startDate > $1.startDate }
+    private var filteredEntries: [CalendarEntryRecord] {
+        let trimmedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return calendarEntryManager.entries
+            .filter { entry in
+                guard trimmedSearchText.isEmpty == false else { return true }
+
+                let normalizedQuery = trimmedSearchText.lowercased()
+                let searchableText = [
+                    entry.title,
+                    entry.notes,
+                    entry.resourceName ?? "",
+                    entryTypeLabel(for: entry.entryType)
+                ]
+                .joined(separator: " ")
+                .lowercased()
+
+                return searchableText.contains(normalizedQuery)
+            }
+            .sorted { $0.startDate > $1.startDate }
+    }
+
+    private var eventEntries: [CalendarEntryRecord] {
+        filteredEntries.filter { $0.entryType == .event }
+    }
+
+    private var reservationAndBlockedEntries: [CalendarEntryRecord] {
+        filteredEntries.filter { $0.entryType == .reservation || $0.entryType == .block }
+    }
+
+    private var updateEntries: [CalendarEntryRecord] {
+        filteredEntries.filter { $0.entryType == .update }
     }
 
     var body: some View {
@@ -142,22 +174,25 @@ private struct ClubContentAdminPage: View {
                         .foregroundStyle(.white.opacity(0.72))
                 }
 
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 20) {
                     Text("Calendar Entries")
                         .font(.title2)
                         .fontWeight(.semibold)
 
-                    if sortedEntries.isEmpty {
-                        Text("No club content has been created yet.")
+                    if filteredEntries.isEmpty {
+                        Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No club content has been created yet." : "No calendar entries match your search.")
                             .foregroundStyle(.white.opacity(0.68))
                     } else {
-                        ForEach(sortedEntries) { entry in
-                            clubEntryRow(for: entry)
+                        if eventEntries.isEmpty == false {
+                            clubEntrySection(title: "Events", entries: eventEntries)
+                        }
 
-                            if entry.id != sortedEntries.last?.id {
-                                Divider()
-                                    .overlay(Color.white.opacity(0.08))
-                            }
+                        if reservationAndBlockedEntries.isEmpty == false {
+                            clubEntrySection(title: "Reservations / Blocked", entries: reservationAndBlockedEntries)
+                        }
+
+                        if updateEntries.isEmpty == false {
+                            clubEntrySection(title: "Updates", entries: updateEntries)
                         }
                     }
                 }
@@ -189,6 +224,80 @@ private struct ClubContentAdminPage: View {
                 ClubContentEditorView(entry: entry)
                     .environmentObject(calendarEntryManager)
             }
+        }
+        .searchable(text: $searchText, prompt: "Search calendar entries")
+        .onChange(of: searchText) { _, newValue in
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                expandedSections = []
+            } else {
+                var sectionsToExpand: Set<String> = []
+
+                if eventEntries.isEmpty == false {
+                    sectionsToExpand.insert("Events")
+                }
+
+                if reservationAndBlockedEntries.isEmpty == false {
+                    sectionsToExpand.insert("Reservations / Blocked")
+                }
+
+                if updateEntries.isEmpty == false {
+                    sectionsToExpand.insert("Updates")
+                }
+
+                expandedSections = sectionsToExpand
+            }
+        }
+    }
+
+    private func clubEntrySection(title: String, entries: [CalendarEntryRecord]) -> some View {
+        let isExpanded = expandedSections.contains(title)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Button {
+                toggleClubSection(title)
+            } label: {
+                HStack(spacing: 12) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.85))
+
+                    Spacer()
+
+                    Text("\(entries.count)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.10))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .clipShape(Capsule())
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    clubEntryRow(for: entry)
+
+                    if index < entries.count - 1 {
+                        Divider()
+                            .overlay(Color.white.opacity(0.08))
+                    }
+                }
+            }
+        }
+    }
+
+    private func toggleClubSection(_ title: String) {
+        if expandedSections.contains(title) {
+            expandedSections.remove(title)
+        } else {
+            expandedSections.insert(title)
         }
     }
 
@@ -304,9 +413,53 @@ private struct MemberContentAdminPage: View {
     @State private var message: String?
     @State private var deletingReservationID: String?
     @State private var editingReservation: ReservationRecord?
+    @State private var searchText = ""
+    @State private var expandedMembers: Set<String> = []
 
-    private var sortedReservations: [ReservationRecord] {
-        reservationManager.reservations.sorted { $0.startDate > $1.startDate }
+    private var filteredReservations: [ReservationRecord] {
+        let trimmedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return reservationManager.reservations
+            .filter { reservation in
+                guard trimmedSearchText.isEmpty == false else { return true }
+
+                let normalizedQuery = trimmedSearchText.lowercased()
+                let searchableText = [
+                    reservation.title,
+                    reservation.userDisplayName,
+                    reservation.resourceName,
+                    reservation.notes,
+                    reservationStatusLabel(for: reservation.status)
+                ]
+                .joined(separator: " ")
+                .lowercased()
+
+                return searchableText.contains(normalizedQuery)
+            }
+            .sorted {
+                if $0.userDisplayName.localizedCaseInsensitiveCompare($1.userDisplayName) == .orderedSame {
+                    return $0.startDate > $1.startDate
+                }
+
+                return $0.userDisplayName.localizedCaseInsensitiveCompare($1.userDisplayName) == .orderedAscending
+            }
+    }
+
+    private var reservationsGroupedByMember: [(memberName: String, reservations: [ReservationRecord])] {
+        let groupedReservations = Dictionary(grouping: filteredReservations) { reservation in
+            reservation.userDisplayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown Member" : reservation.userDisplayName
+        }
+
+        return groupedReservations
+            .map { memberName, reservations in
+                (
+                    memberName: memberName,
+                    reservations: reservations.sorted { $0.startDate > $1.startDate }
+                )
+            }
+            .sorted {
+                $0.memberName.localizedCaseInsensitiveCompare($1.memberName) == .orderedAscending
+            }
     }
 
     var body: some View {
@@ -321,22 +474,17 @@ private struct MemberContentAdminPage: View {
                         .foregroundStyle(.white.opacity(0.72))
                 }
 
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 20) {
                     Text("Reservations")
                         .font(.title2)
                         .fontWeight(.semibold)
 
-                    if sortedReservations.isEmpty {
-                        Text("No member reservations have been created yet.")
+                    if filteredReservations.isEmpty {
+                        Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No member reservations have been created yet." : "No reservations match your search.")
                             .foregroundStyle(.white.opacity(0.68))
                     } else {
-                        ForEach(sortedReservations) { reservation in
-                            reservationRow(for: reservation)
-
-                            if reservation.id != sortedReservations.last?.id {
-                                Divider()
-                                    .overlay(Color.white.opacity(0.08))
-                            }
+                        ForEach(reservationsGroupedByMember, id: \.memberName) { group in
+                            memberReservationSection(memberName: group.memberName, reservations: group.reservations)
                         }
                     }
                 }
@@ -369,6 +517,66 @@ private struct MemberContentAdminPage: View {
                     .environmentObject(reservationManager)
             }
         }
+        .searchable(text: $searchText, prompt: "Search reservations")
+        .onChange(of: searchText) { _, newValue in
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                expandedMembers = []
+            } else {
+                expandedMembers = Set(reservationsGroupedByMember.map(\.memberName))
+            }
+        }
+    }
+
+    private func memberReservationSection(memberName: String, reservations: [ReservationRecord]) -> some View {
+        let isExpanded = expandedMembers.contains(memberName)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Button {
+                toggleMemberSection(memberName)
+            } label: {
+                HStack(spacing: 12) {
+                    Text(memberName)
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.85))
+
+                    Spacer()
+
+                    Text("\(reservations.count)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.10))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .clipShape(Capsule())
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                ForEach(Array(reservations.enumerated()), id: \.element.id) { index, reservation in
+                    reservationRow(for: reservation)
+
+                    if index < reservations.count - 1 {
+                        Divider()
+                            .overlay(Color.white.opacity(0.08))
+                    }
+                }
+            }
+        }
+    }
+
+    private func toggleMemberSection(_ memberName: String) {
+        if expandedMembers.contains(memberName) {
+            expandedMembers.remove(memberName)
+        } else {
+            expandedMembers.insert(memberName)
+        }
     }
 
     private func reservationRow(for reservation: ReservationRecord) -> some View {
@@ -377,10 +585,6 @@ private struct MemberContentAdminPage: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(reservation.title)
                         .font(.headline)
-
-                    Text(reservation.userDisplayName)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.72))
 
                     Text(reservation.resourceName)
                         .font(.caption)
@@ -426,6 +630,19 @@ private struct MemberContentAdminPage: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    private func reservationStatusLabel(for status: ReservationStatus) -> String {
+        switch status {
+        case .pending:
+            return "Pending"
+        case .approved:
+            return "Confirmed"
+        case .denied:
+            return "Denied"
+        case .cancelled:
+            return "Cancelled"
+        }
     }
 
     private func reservationDateText(for reservation: ReservationRecord) -> String {
@@ -861,7 +1078,12 @@ private struct HowToContentAdminPage: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Title")
-                TextField("Enter title", text: $title)
+                TextField(
+                    "",
+                    text: $title,
+                    prompt: Text("Enter title").foregroundStyle(.white.opacity(0.55))
+                )
+                    .foregroundStyle(.white)
                     .padding()
                     .background(Color.white.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -869,7 +1091,12 @@ private struct HowToContentAdminPage: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Summary")
-                TextField("Enter summary", text: $summary)
+                TextField(
+                    "",
+                    text: $summary,
+                    prompt: Text("Enter summary").foregroundStyle(.white.opacity(0.55))
+                )
+                    .foregroundStyle(.white)
                     .padding()
                     .background(Color.white.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -879,10 +1106,13 @@ private struct HowToContentAdminPage: View {
                 Text("Category")
                 Picker("Category", selection: $selectedCategory) {
                     ForEach(HowToCategory.allCases) { category in
-                        Text(category.title).tag(category)
+                        Text(category.title)
+                            .foregroundStyle(.black)
+                            .tag(category)
                     }
                 }
                 .pickerStyle(.segmented)
+                .colorScheme(.light)
             }
 
             Toggle("Published", isOn: $isPublished)
