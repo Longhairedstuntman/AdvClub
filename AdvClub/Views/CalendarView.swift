@@ -30,17 +30,13 @@ struct CalendarView: View {
         ], for: .selected)
     }
 
-    private let monthOffsets: [Int] = Array(-24...24)
-
-    private var months: [CalendarMonth] {
+    private static let months: [CalendarMonth] = {
         let calendar = Calendar.current
         let currentMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
-
-        return monthOffsets.compactMap { offset in
+        return Array(-24...24).compactMap { offset in
             calendar.date(byAdding: .month, value: offset, to: currentMonthStart)
-        }
-        .map { CalendarMonth.makeMonth(for: $0) }
-    }
+        }.map { CalendarMonth.makeMonth(for: $0) }
+    }()
 
     var body: some View {
         ScrollView {
@@ -185,7 +181,7 @@ struct CalendarView: View {
             }
 
             TabView(selection: $selectedMonthIndex) {
-                ForEach(Array(months.enumerated()), id: \.offset) { index, month in
+                ForEach(Array(CalendarView.months.enumerated()), id: \.offset) { index, month in
                     monthGrid(for: month)
                         .tag(index)
                 }
@@ -203,7 +199,12 @@ struct CalendarView: View {
     }
 
     private func monthGrid(for month: CalendarMonth) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 7), spacing: 10) {
+        let dayCategories: [UUID: [CalendarItemCategory]] = Dictionary(
+            uniqueKeysWithValues: month.days.map { day in
+                (day.id, effectiveCategories(for: day, month: month))
+            }
+        )
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 7), spacing: 10) {
             ForEach(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], id: \.self) { day in
                 Text(day)
                     .font(.caption)
@@ -212,7 +213,7 @@ struct CalendarView: View {
             }
 
             ForEach(month.days) { day in
-                calendarDayCell(day, month: month)
+                calendarDayCell(day, categories: dayCategories[day.id] ?? [])
             }
         }
     }
@@ -239,7 +240,7 @@ struct CalendarView: View {
             }
 
             TabView(selection: $selectedMonthIndex) {
-                ForEach(Array(months.enumerated()), id: \.offset) { index, month in
+                ForEach(Array(CalendarView.months.enumerated()), id: \.offset) { index, month in
                     agendaPage(for: month)
                         .tag(index)
                 }
@@ -340,7 +341,7 @@ struct CalendarView: View {
     }
 
     private var currentMonth: CalendarMonth {
-        months[selectedMonthIndex]
+        CalendarView.months[selectedMonthIndex]
     }
     
     private var defaultSelectedDateTitle: String {
@@ -649,7 +650,7 @@ struct CalendarView: View {
     private func calendarChevronButton(systemImage: String, direction: Int) -> some View {
         Button {
             let newIndex = selectedMonthIndex + direction
-            guard months.indices.contains(newIndex) else { return }
+            guard CalendarView.months.indices.contains(newIndex) else { return }
             selectedMonthIndex = newIndex
         } label: {
             Image(systemName: systemImage)
@@ -661,10 +662,8 @@ struct CalendarView: View {
         .buttonStyle(.plain)
     }
 
-    private func calendarDayCell(_ day: CalendarDay, month: CalendarMonth) -> some View {
-        let categories = effectiveCategories(for: day, month: month)
-
-        return Button {
+    private func calendarDayCell(_ day: CalendarDay, categories: [CalendarItemCategory]) -> some View {
+        Button {
             guard day.number != nil else { return }
             selectedDay = day
         } label: {
